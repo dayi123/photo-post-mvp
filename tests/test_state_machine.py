@@ -1,0 +1,12 @@
+from app.schemas import JobState
+from app.services.jobs import ALLOWED_TRANSITIONS
+
+
+def test_required_state_transitions_exist():
+    assert JobState.PREVIEW_1_EXPORTED in ALLOWED_TRANSITIONS[JobState.RECEIVED]
+    assert JobState.WAIT_USER_CONFIRM in ALLOWED_TRANSITIONS[JobState.PLAN_GENERATED]
+    assert JobState.ACTION_GENERATED in ALLOWED_TRANSITIONS[JobState.WAIT_USER_CONFIRM]
+    assert JobState.QUALITY_CHECKED in ALLOWED_TRANSITIONS[JobState.PREVIEW_2_EXPORTED]
+    assert JobState.FINAL_EXPORTED in ALLOWED_TRANSITIONS[JobState.QUALITY_CHECKED]
+    assert JobState.DELIVERED_ARCHIVED in ALLOWED_TRANSITIONS[JobState.FINAL_EXPORTED]
+    assert JobState.FAILED in ALLOWED_TRANSITIONS[JobState.QUALITY_CHECKED]

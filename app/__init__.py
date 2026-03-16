@@ -1,0 +1,2 @@
+"""photo-post-mvp package."""
+
