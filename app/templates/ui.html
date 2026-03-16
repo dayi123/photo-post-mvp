@@ -3,215 +3,230 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Plan confirmation UI</title>
+    <title data-i18n="page_title">Photo Post MVP Console</title>
     <link rel="stylesheet" href="{{ request.url_for('static', path='ui.css') }}" />
     <script defer src="{{ request.url_for('static', path='ui.js') }}"></script>
   </head>
   <body>
     <main class="page">
-      <section class="card hero">
-        <p class="eyebrow">Photo Post MVP</p>
-        <h1>Plan confirmation UI</h1>
-        <p class="muted">
-          Upload a photo, inspect the generated plan, confirm it, and wait for the final image.
-        </p>
-      </section>
-
-      <section class="card stack">
-        <div class="row">
-          <div>
-            <h2>Settings</h2>
-            <p class="muted">
-              Configure the runtime model, key, relay base URL, and editor backend used for new jobs.
-            </p>
-          </div>
+      <section class="hero-shell">
+        <div class="hero-copy">
+          <p class="eyebrow">Photo Post MVP</p>
+          <h1 data-i18n="hero_title">Photo Post Console</h1>
+          <p class="muted" data-i18n="hero_subtitle">
+            Upload, confirm plan, and export final image. Switch language anytime.
+          </p>
         </div>
-        <form id="settings-form" class="stack">
-          <div class="form-grid">
-            <label class="field">
-              <span>Provider</span>
-              <select id="settings-provider" name="llm_provider">
-                <option value="openai">OpenAI</option>
-                <option value="google">Google</option>
-                <option value="custom">Custom</option>
-              </select>
-            </label>
-            <label class="field">
-              <span>Model preset</span>
-              <select id="settings-model-preset">
-                <option value="gpt-5.4">gpt-5.4</option>
-                <option value="gemini-3.1">gemini-3.1</option>
-                <option value="custom">Custom</option>
-              </select>
-            </label>
-            <label class="field field-wide">
-              <span>Model</span>
-              <input id="settings-model-input" name="llm_model" type="text" placeholder="Enter a model name" />
-            </label>
-            <label class="field field-wide">
-              <span>API key</span>
-              <input id="settings-api-key" name="llm_api_key" type="password" autocomplete="off" />
-            </label>
-            <label class="field field-wide">
-              <span>Base URL</span>
-              <input
-                id="settings-base-url"
-                name="llm_base_url"
-                type="text"
-                placeholder="Optional relay or provider base URL"
-              />
-            </label>
-            <label class="field">
-              <span>Plan template pack</span>
-              <select id="settings-plan-template-pack" name="plan_template_pack">
-                <option value="auto">auto</option>
-                <option value="gpt-5.4">gpt-5.4</option>
-                <option value="gemini-3.1">gemini-3.1</option>
-                <option value="default">default</option>
-              </select>
-            </label>
-            <label class="field">
-              <span>Action template pack</span>
-              <select id="settings-action-template-pack" name="action_template_pack">
-                <option value="auto">auto</option>
-                <option value="gpt-5.4">gpt-5.4</option>
-                <option value="gemini-3.1">gemini-3.1</option>
-                <option value="default">default</option>
-              </select>
-            </label>
-            <label class="field">
-              <span>Editor backend</span>
-              <select id="settings-editor-backend" name="editor_backend">
-                <option value="stub">stub</option>
-                <option value="davinci">davinci</option>
-              </select>
-            </label>
-            <label class="field field-wide">
-              <span>DaVinci command</span>
-              <input id="settings-davinci-cmd" name="davinci_cmd" type="text" placeholder="python scripts\\davinci_bridge.py" />
-            </label>
-            <label class="field">
-              <span>Input mode</span>
-              <select id="settings-davinci-input-mode" name="davinci_input_mode">
-                <option value="stdin">stdin</option>
-                <option value="file">file</option>
-              </select>
-            </label>
-            <label class="field">
-              <span>Timeout (seconds)</span>
-              <input id="settings-davinci-timeout" name="davinci_timeout_seconds" type="number" min="1" max="600" />
-            </label>
-          </div>
-          <div class="details compact">
-            <div>
-              <dt>Current key</dt>
-              <dd id="settings-key-mask">-</dd>
-            </div>
-            <div>
-              <dt>Status</dt>
-              <dd id="settings-status">Not loaded</dd>
-            </div>
-            <div>
-              <dt>Effective plan pack</dt>
-              <dd id="settings-effective-plan-pack">-</dd>
-            </div>
-            <div>
-              <dt>Effective action pack</dt>
-              <dd id="settings-effective-action-pack">-</dd>
-            </div>
-          </div>
-          <div class="actions wrap">
-            <button id="settings-save-button" type="submit">Save settings</button>
-            <button id="settings-test-llm-button" type="button" class="secondary">Test LLM</button>
-            <button id="settings-test-editor-button" type="button" class="secondary">Test Editor</button>
-            <button id="settings-reload-button" type="button" class="secondary">Reload settings</button>
-          </div>
-        </form>
-        <p id="settings-flash" class="flash" role="status"></p>
-        <div id="settings-test-result" class="empty">No settings test has been run yet.</div>
-      </section>
-
-      <section class="card">
-        <form id="upload-form" class="stack">
-          <label class="field">
-            <span>Photo</span>
-            <input id="photo-input" name="file" type="file" accept="image/*" required />
+        <div class="hero-controls">
+          <label class="field inline">
+            <span data-i18n="label_language">Language</span>
+            <select id="language-select">
+              <option value="en">English</option>
+              <option value="zh">中文</option>
+            </select>
           </label>
-          <button id="upload-button" type="submit">Upload photo</button>
-        </form>
-        <p id="flash" class="flash" role="status"></p>
-      </section>
-
-      <section class="card stack">
-        <div class="row">
-          <div>
-            <h2>Job status</h2>
-            <p class="muted">The pipeline starts with plan generation and waits for confirmation.</p>
-          </div>
-          <span id="job-state" class="badge">Idle</span>
-        </div>
-        <dl class="details">
-          <div>
-            <dt>Job ID</dt>
-            <dd id="job-id">-</dd>
-          </div>
-          <div>
-            <dt>Filename</dt>
-            <dd id="job-file">-</dd>
-          </div>
-          <div>
-            <dt>Review rounds</dt>
-            <dd id="job-rounds">0</dd>
-          </div>
-          <div>
-            <dt>Error</dt>
-            <dd id="job-error">-</dd>
-          </div>
-        </dl>
-        <div class="actions">
-          <button id="confirm-button" type="button" disabled hidden>Confirm plan</button>
         </div>
       </section>
 
-      <section class="card stack">
-        <div class="row">
-          <div>
-            <h2>Generated plan</h2>
-            <p class="muted">This appears after the initial upload finishes.</p>
-          </div>
-        </div>
-        <div id="plan-empty" class="empty">No plan yet.</div>
-        <div id="plan-content" class="plan" hidden>
-          <p id="plan-summary" class="plan-summary"></p>
-          <div class="pill-group">
+      <nav class="tabs" aria-label="Main tabs">
+        <button id="tab-workbench" class="tab active" data-tab="workbench" type="button" data-i18n="tab_workbench">Workbench</button>
+        <button id="tab-settings" class="tab" data-tab="settings" type="button" data-i18n="tab_settings">Settings</button>
+      </nav>
+
+      <section id="panel-workbench" class="panel active" data-panel="workbench">
+        <section class="card">
+          <form id="upload-form" class="stack">
+            <label class="field">
+              <span data-i18n="label_photo">Photo</span>
+              <input id="photo-input" name="file" type="file" accept="image/*" required />
+            </label>
+            <button id="upload-button" type="submit" data-i18n="btn_upload">Upload photo</button>
+          </form>
+          <p id="flash" class="flash" role="status"></p>
+        </section>
+
+        <section class="card stack">
+          <div class="row">
             <div>
-              <h3>Goals</h3>
-              <ul id="plan-goals"></ul>
+              <h2 data-i18n="job_status_title">Job status</h2>
+              <p class="muted" data-i18n="job_status_subtitle">The pipeline starts with plan generation and waits for confirmation.</p>
+            </div>
+            <span id="job-state" class="badge">Idle</span>
+          </div>
+          <dl class="details">
+            <div>
+              <dt data-i18n="field_job_id">Job ID</dt>
+              <dd id="job-id">-</dd>
             </div>
             <div>
-              <h3>Risks</h3>
-              <ul id="plan-risks"></ul>
+              <dt data-i18n="field_filename">Filename</dt>
+              <dd id="job-file">-</dd>
+            </div>
+            <div>
+              <dt data-i18n="field_review_rounds">Review rounds</dt>
+              <dd id="job-rounds">0</dd>
+            </div>
+            <div>
+              <dt data-i18n="field_error">Error</dt>
+              <dd id="job-error">-</dd>
+            </div>
+          </dl>
+          <div class="actions">
+            <button id="confirm-button" type="button" disabled hidden data-i18n="btn_confirm_plan">Confirm plan</button>
+          </div>
+        </section>
+
+        <section class="card stack">
+          <div class="row">
+            <div>
+              <h2 data-i18n="plan_title">Generated plan</h2>
+              <p class="muted" data-i18n="plan_subtitle">This appears after the initial upload finishes.</p>
             </div>
           </div>
-          <div>
-            <h3>Steps</h3>
-            <ol id="plan-steps"></ol>
+          <div id="plan-empty" class="empty" data-i18n="plan_empty">No plan yet.</div>
+          <div id="plan-content" class="plan" hidden>
+            <p id="plan-summary" class="plan-summary"></p>
+            <div class="pill-group">
+              <div>
+                <h3 data-i18n="plan_goals">Goals</h3>
+                <ul id="plan-goals"></ul>
+              </div>
+              <div>
+                <h3 data-i18n="plan_risks">Risks</h3>
+                <ul id="plan-risks"></ul>
+              </div>
+            </div>
+            <div>
+              <h3 data-i18n="plan_steps">Steps</h3>
+              <ol id="plan-steps"></ol>
+            </div>
           </div>
-        </div>
+        </section>
+
+        <section class="card stack">
+          <div class="row">
+            <div>
+              <h2 data-i18n="result_title">Final image</h2>
+              <p class="muted" data-i18n="result_subtitle">Once delivered, the final image appears here.</p>
+            </div>
+          </div>
+          <div id="result-empty" class="empty" data-i18n="result_empty">No final image yet.</div>
+          <div id="result-content" hidden>
+            <img id="result-image" alt="Final image output" />
+            <a id="result-download" class="download" href="#" download data-i18n="btn_download">Download final image</a>
+          </div>
+        </section>
       </section>
 
-      <section class="card stack">
-        <div class="row">
-          <div>
-            <h2>Final image</h2>
-            <p class="muted">Once the job reaches delivered status, the final image appears here.</p>
+      <section id="panel-settings" class="panel" data-panel="settings" hidden>
+        <section class="card stack">
+          <div class="row">
+            <div>
+              <h2 data-i18n="settings_title">Settings</h2>
+              <p class="muted" data-i18n="settings_subtitle">
+                Configure model, relay base URL, and editor backend for new jobs.
+              </p>
+            </div>
           </div>
-        </div>
-        <div id="result-empty" class="empty">No final image yet.</div>
-        <div id="result-content" hidden>
-          <img id="result-image" alt="Final image output" />
-          <a id="result-download" class="download" href="#" download>Download final image</a>
-        </div>
+          <form id="settings-form" class="stack">
+            <div class="form-grid">
+              <label class="field">
+                <span data-i18n="field_provider">Provider</span>
+                <select id="settings-provider" name="llm_provider">
+                  <option value="openai">OpenAI</option>
+                  <option value="google">Google</option>
+                  <option value="custom">Custom</option>
+                </select>
+              </label>
+              <label class="field">
+                <span data-i18n="field_model_preset">Model preset</span>
+                <select id="settings-model-preset">
+                  <option value="gpt-5.4">gpt-5.4</option>
+                  <option value="gemini-3.1">gemini-3.1</option>
+                  <option value="custom" data-i18n="option_custom">Custom</option>
+                </select>
+              </label>
+              <label class="field field-wide">
+                <span data-i18n="field_model">Model</span>
+                <input id="settings-model-input" name="llm_model" type="text" placeholder="Enter a model name" />
+              </label>
+              <label class="field field-wide">
+                <span data-i18n="field_api_key">API key</span>
+                <input id="settings-api-key" name="llm_api_key" type="password" autocomplete="off" />
+              </label>
+              <label class="field field-wide">
+                <span data-i18n="field_base_url">Base URL</span>
+                <input id="settings-base-url" name="llm_base_url" type="text" placeholder="Optional relay or provider base URL" />
+              </label>
+              <label class="field">
+                <span data-i18n="field_plan_pack">Plan template pack</span>
+                <select id="settings-plan-template-pack" name="plan_template_pack">
+                  <option value="auto">auto</option>
+                  <option value="gpt-5.4">gpt-5.4</option>
+                  <option value="gemini-3.1">gemini-3.1</option>
+                  <option value="default">default</option>
+                </select>
+              </label>
+              <label class="field">
+                <span data-i18n="field_action_pack">Action template pack</span>
+                <select id="settings-action-template-pack" name="action_template_pack">
+                  <option value="auto">auto</option>
+                  <option value="gpt-5.4">gpt-5.4</option>
+                  <option value="gemini-3.1">gemini-3.1</option>
+                  <option value="default">default</option>
+                </select>
+              </label>
+              <label class="field">
+                <span data-i18n="field_editor_backend">Editor backend</span>
+                <select id="settings-editor-backend" name="editor_backend">
+                  <option value="stub">stub</option>
+                  <option value="davinci">davinci</option>
+                </select>
+              </label>
+              <label class="field field-wide">
+                <span data-i18n="field_davinci_cmd">DaVinci command</span>
+                <input id="settings-davinci-cmd" name="davinci_cmd" type="text" placeholder="python scripts\\davinci_bridge.py" />
+              </label>
+              <label class="field">
+                <span data-i18n="field_input_mode">Input mode</span>
+                <select id="settings-davinci-input-mode" name="davinci_input_mode">
+                  <option value="stdin">stdin</option>
+                  <option value="file">file</option>
+                </select>
+              </label>
+              <label class="field">
+                <span data-i18n="field_timeout">Timeout (seconds)</span>
+                <input id="settings-davinci-timeout" name="davinci_timeout_seconds" type="number" min="1" max="600" />
+              </label>
+            </div>
+            <div class="details compact">
+              <div>
+                <dt data-i18n="field_current_key">Current key</dt>
+                <dd id="settings-key-mask">-</dd>
+              </div>
+              <div>
+                <dt data-i18n="field_status">Status</dt>
+                <dd id="settings-status">Not loaded</dd>
+              </div>
+              <div>
+                <dt data-i18n="field_effective_plan">Effective plan pack</dt>
+                <dd id="settings-effective-plan-pack">-</dd>
+              </div>
+              <div>
+                <dt data-i18n="field_effective_action">Effective action pack</dt>
+                <dd id="settings-effective-action-pack">-</dd>
+              </div>
+            </div>
+            <div class="actions wrap">
+              <button id="settings-save-button" type="submit" data-i18n="btn_save">Save settings</button>
+              <button id="settings-test-llm-button" type="button" class="secondary" data-i18n="btn_test_llm">Test LLM</button>
+              <button id="settings-test-editor-button" type="button" class="secondary" data-i18n="btn_test_editor">Test Editor</button>
+              <button id="settings-reload-button" type="button" class="secondary" data-i18n="btn_reload">Reload settings</button>
+            </div>
+          </form>
+          <p id="settings-flash" class="flash" role="status"></p>
+          <div id="settings-test-result" class="empty" data-i18n="settings_test_placeholder">No settings test has been run yet.</div>
+        </section>
       </section>
     </main>
   </body>

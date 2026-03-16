@@ -19,7 +19,7 @@ def test_ui_route_exists(client):
     response = client.get("/ui")
     assert response.status_code == 200
     assert "text/html" in response.headers["content-type"]
-    assert "Plan confirmation UI" in response.text
+    assert "Photo Post Console" in response.text
 
 
 def test_job_lifecycle(client):
