@@ -18,3 +18,4 @@
 - Added model presets for `gpt-5.4` and `gemini-3.1` while keeping free-form model input.
 - Added tests for settings CRUD, persistence, masking, editor self-test, and audit secret redaction.
 - Documented the new settings workflow and the MVP plain-text local key storage caveat in the README.
+- Added beginner one-click Windows startup scripts: `quick_start.bat` and `quick_setup.ps1`.
