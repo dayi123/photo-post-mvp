@@ -206,6 +206,11 @@ class JobService:
             model=runtime_config.llm_model,
             override=runtime_config.plan_template_pack,
         )
+        plan_request_payload = self.runtime_settings.build_plan_request_payload(
+            runtime_config,
+            job.original_filename,
+            analysis_image_path=analysis_path,
+        )
         plan = llm_stub.generate_plan(job.original_filename)
         job.plan_json = plan.model_dump_json()
         self._transition(job, session, JobState.PLAN_GENERATED)
@@ -220,6 +225,7 @@ class JobService:
                     "selected_pack": plan_prompt.pack,
                     "rendered_prompt": plan_prompt.text,
                 },
+                "prepared_request_payload": plan_request_payload,
             },
         )
 

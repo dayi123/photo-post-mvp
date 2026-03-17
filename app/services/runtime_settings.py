@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import base64
 import json
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -199,13 +201,24 @@ class RuntimeSettingsService:
             davinci_timeout_seconds=self.app_settings.default_davinci_timeout_seconds,
         )
 
-    def build_plan_request_payload(self, config: RuntimeConfig, original_filename: str) -> dict[str, Any]:
+    def build_plan_request_payload(
+        self,
+        config: RuntimeConfig,
+        original_filename: str,
+        analysis_image_path: Path | None = None,
+    ) -> dict[str, Any]:
         rendered = prompt_templates.build_plan_prompt(
             original_filename=original_filename,
             model=config.llm_model,
             override=config.plan_template_pack,
         )
-        return self._build_stage_request_payload(config, rendered.text, rendered.pack)
+        analysis_image_data = self._encode_image_as_data_url(analysis_image_path)
+        return self._build_stage_request_payload(
+            config,
+            rendered.text,
+            rendered.pack,
+            analysis_image_data=analysis_image_data,
+        )
 
     def build_action_request_payload(self, config: RuntimeConfig, plan: Plan, review_round: int) -> dict[str, Any]:
         rendered = prompt_templates.build_action_prompt(
@@ -230,13 +243,26 @@ class RuntimeSettingsService:
         prompt_text: str,
         pack: str,
         contract_summary: dict[str, Any] | None = None,
+        analysis_image_data: str | None = None,
     ) -> dict[str, Any]:
         if config.llm_provider == "google":
+            parts: list[dict[str, Any]] = [{"text": prompt_text}]
+            if analysis_image_data:
+                mime, encoded = self._split_data_url(analysis_image_data)
+                parts.append(
+                    {
+                        "inline_data": {
+                            "mime_type": mime,
+                            "data": encoded,
+                        }
+                    }
+                )
+
             payload: dict[str, Any] = {
                 "provider": config.llm_provider,
                 "model": config.llm_model,
                 "selected_pack": pack,
-                "contents": [{"parts": [{"text": prompt_text}]}],
+                "contents": [{"parts": parts}],
             }
             if contract_summary:
                 payload["generationConfig"] = {
@@ -245,11 +271,25 @@ class RuntimeSettingsService:
                 }
             return payload
 
+        input_content: list[dict[str, Any]] = [{"type": "input_text", "text": prompt_text}]
+        if analysis_image_data:
+            input_content.append(
+                {
+                    "type": "input_image",
+                    "image_url": analysis_image_data,
+                }
+            )
+
         payload = {
             "provider": config.llm_provider,
             "model": config.llm_model,
             "selected_pack": pack,
-            "input": prompt_text,
+            "input": [
+                {
+                    "role": "user",
+                    "content": input_content,
+                }
+            ],
         }
         if contract_summary:
             payload["response_format"] = {
@@ -344,6 +384,23 @@ class RuntimeSettingsService:
                     json=request.get("json"),
                     timeout=retry_timeout,
                 )
+
+    @staticmethod
+    def _encode_image_as_data_url(image_path: Path | None) -> str | None:
+        if image_path is None or not image_path.exists():
+            return None
+        data = image_path.read_bytes()
+        encoded = base64.b64encode(data).decode("ascii")
+        mime = "image/jpeg"
+        return f"data:{mime};base64,{encoded}"
+
+    @staticmethod
+    def _split_data_url(value: str) -> tuple[str, str]:
+        if not value.startswith("data:") or "," not in value:
+            raise ValueError("Invalid data URL.")
+        header, encoded = value.split(",", 1)
+        mime = header[5:].split(";", 1)[0] or "image/jpeg"
+        return mime, encoded
 
     @staticmethod
     def _join_base_url(base_url: str) -> str:

@@ -264,6 +264,9 @@ def test_plan_and_action_audits_include_template_metadata(client):
 
     assert plan_audit["payload"]["prompt_template"]["selected_pack"] == "gemini-3.1"
     assert "Input filename: sample.jpg" in plan_audit["payload"]["prompt_template"]["rendered_prompt"]
+    prepared_payload = plan_audit["payload"]["prepared_request_payload"]
+    parts = prepared_payload["contents"][0]["parts"]
+    assert any("inline_data" in part for part in parts)
     assert action_audit["payload"]["prompt_template"]["selected_pack"] == "default"
     assert "Output JSON only and follow the contract exactly." in action_audit["payload"]["prompt_template"]["rendered_prompt"]
     assert action_audit["payload"]["prompt_template"]["json_schema_contract_summary"]["required"] == [
