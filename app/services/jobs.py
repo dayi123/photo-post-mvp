@@ -36,7 +36,8 @@ ALLOWED_TRANSITIONS: dict[JobState, set[JobState]] = {
     },
 }
 
-ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
+RAW_EXTENSIONS = {".dng", ".cr2", ".cr3", ".nef", ".arw", ".rw2", ".orf", ".raf", ".pef", ".srw", ".raw"}
+ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", *RAW_EXTENSIONS}
 
 
 class JobService:
@@ -295,13 +296,22 @@ class JobService:
         if suffix not in ALLOWED_EXTENSIONS:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Unsupported file type. Use jpg, jpeg, png, or webp.",
+                detail="Unsupported file type. Use jpg, jpeg, png, webp, or common RAW formats.",
             )
-        if upload.content_type and not upload.content_type.startswith("image/"):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Unsupported content type. Expected an image upload.",
-            )
+
+        content_type = (upload.content_type or "").lower()
+        if not content_type:
+            return
+        if content_type.startswith("image/"):
+            return
+        # Browsers and desktop clients often mark RAW uploads as octet-stream.
+        if suffix in RAW_EXTENSIONS and content_type in {"application/octet-stream", "binary/octet-stream"}:
+            return
+
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Unsupported content type. Expected an image or RAW upload.",
+        )
 
     def _transition(
         self,

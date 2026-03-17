@@ -11,7 +11,7 @@ from app.services.editor_adapters import EditorAdapterError, build_editor_adapte
 from app.services import prompt_templates
 
 
-LLM_TEST_TIMEOUT_SECONDS = 5
+LLM_TEST_TIMEOUT_SECONDS = 15
 
 
 def mask_secret(secret: str | None) -> str | None:
@@ -89,7 +89,13 @@ class RuntimeSettingsService:
 
     def test_editor(self, config: RuntimeConfig | None = None) -> SettingsTestResult:
         runtime_config = config or self.load()
-        adapter = build_editor_adapter(runtime_config)
+
+        # Keep settings test usable even when DaVinci backend is selected but not wired yet.
+        effective_config = runtime_config
+        if runtime_config.editor_backend == "davinci" and not runtime_config.davinci_cmd:
+            effective_config = runtime_config.model_copy(update={"editor_backend": "stub"})
+
+        adapter = build_editor_adapter(effective_config)
         sample_action = Action(
             profile="settings-self-test",
             adjustments=[{"op": "exposure", "value": 1, "rationale": "Connectivity self-test."}],
@@ -103,6 +109,14 @@ class RuntimeSettingsService:
                 backend=runtime_config.editor_backend,
                 message="Editor self-test failed.",
                 detail=str(exc),
+            )
+
+        if runtime_config.editor_backend == "davinci" and not runtime_config.davinci_cmd:
+            return SettingsTestResult(
+                success=True,
+                backend="stub",
+                message="Editor self-test succeeded (stub fallback).",
+                detail="DaVinci backend is selected but davinci_cmd is empty; configure davinci_cmd to test DaVinci directly.",
             )
 
         return SettingsTestResult(
@@ -127,12 +141,13 @@ class RuntimeSettingsService:
             request = self._build_llm_request(runtime_config)
             response = self._perform_llm_request(request)
             request_used = request
-            if (
+            should_fallback = (
                 not response.is_success
                 and runtime_config.llm_provider in {"openai", "custom"}
                 and request["url"].endswith("/responses")
                 and response.status_code in {404, 405, 422, 500}
-            ):
+            )
+            if should_fallback:
                 fallback_request = self._build_openai_chat_completions_request(runtime_config)
                 fallback_response = self._perform_llm_request(fallback_request)
                 if fallback_response.is_success:
@@ -308,15 +323,27 @@ class RuntimeSettingsService:
         }
 
     def _perform_llm_request(self, request: dict[str, Any]) -> httpx.Response:
-        timeout = httpx.Timeout(LLM_TEST_TIMEOUT_SECONDS, connect=3.0)
+        timeout = httpx.Timeout(LLM_TEST_TIMEOUT_SECONDS, connect=5.0)
         with httpx.Client(timeout=timeout) as client:
-            return client.request(
-                request["method"],
-                request["url"],
-                headers=request.get("headers"),
-                params=request.get("params"),
-                json=request.get("json"),
-            )
+            try:
+                return client.request(
+                    request["method"],
+                    request["url"],
+                    headers=request.get("headers"),
+                    params=request.get("params"),
+                    json=request.get("json"),
+                )
+            except httpx.ReadTimeout:
+                # Retry once with a looser timeout because relay gateways can be bursty.
+                retry_timeout = httpx.Timeout(LLM_TEST_TIMEOUT_SECONDS + 10, connect=5.0)
+                return client.request(
+                    request["method"],
+                    request["url"],
+                    headers=request.get("headers"),
+                    params=request.get("params"),
+                    json=request.get("json"),
+                    timeout=retry_timeout,
+                )
 
     @staticmethod
     def _join_base_url(base_url: str) -> str:

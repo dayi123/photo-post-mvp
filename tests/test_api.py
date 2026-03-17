@@ -61,6 +61,14 @@ def test_invalid_upload_type_is_rejected(client):
     assert response.status_code == 400
 
 
+def test_raw_upload_is_accepted_with_octet_stream(client):
+    response = client.post(
+        "/jobs",
+        files={"file": ("sample.dng", b"fake-raw-bytes", "application/octet-stream")},
+    )
+    assert response.status_code == 201
+
+
 def test_result_not_ready_before_confirmation(client):
     response = client.post(
         "/jobs",
@@ -148,6 +156,21 @@ def test_settings_test_editor_supports_stub_and_davinci(client, tmp_path: Path):
     assert stub_response.status_code == 200
     assert stub_response.json()["success"] is True
     assert stub_response.json()["backend"] == "stub"
+
+    fallback_response = client.put(
+        "/settings",
+        json={
+            "editor_backend": "davinci",
+            "davinci_cmd": "",
+            "davinci_input_mode": "stdin",
+            "davinci_timeout_seconds": 10,
+        },
+    )
+    assert fallback_response.status_code == 200
+    fallback_test = client.post("/settings/test-editor")
+    assert fallback_test.status_code == 200
+    assert fallback_test.json()["success"] is True
+    assert fallback_test.json()["backend"] == "stub"
 
     script_path = tmp_path / "davinci_self_test.py"
     script_path.write_text(
