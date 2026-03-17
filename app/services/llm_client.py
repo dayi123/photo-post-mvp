@@ -32,28 +32,31 @@ class LlmClient:
         return Review.model_validate(payload)
 
     def _execute(self, request: dict[str, Any], provider: str) -> str:
-        with httpx.Client(timeout=self.timeout) as client:
-            response = client.request(
-                method=request["method"],
-                url=request["url"],
-                headers=request.get("headers"),
-                params=request.get("params"),
-                json=request.get("json"),
-            )
-
-            if (
-                not response.is_success
-                and provider in {"openai", "custom"}
-                and str(request.get("url", "")).endswith("/responses")
-                and response.status_code in {404, 405, 422, 500}
-            ):
-                fallback_request = self._build_chat_completions_fallback(request)
+        try:
+            with httpx.Client(timeout=self.timeout) as client:
                 response = client.request(
-                    method=fallback_request["method"],
-                    url=fallback_request["url"],
-                    headers=fallback_request.get("headers"),
-                    json=fallback_request.get("json"),
+                    method=request["method"],
+                    url=request["url"],
+                    headers=request.get("headers"),
+                    params=request.get("params"),
+                    json=request.get("json"),
                 )
+
+                if (
+                    not response.is_success
+                    and provider in {"openai", "custom"}
+                    and str(request.get("url", "")).endswith("/responses")
+                    and response.status_code in {404, 405, 422, 500}
+                ):
+                    fallback_request = self._build_chat_completions_fallback(request)
+                    response = client.request(
+                        method=fallback_request["method"],
+                        url=fallback_request["url"],
+                        headers=fallback_request.get("headers"),
+                        json=fallback_request.get("json"),
+                    )
+        except httpx.HTTPError as exc:
+            raise LlmClientError(f"LLM network error: {exc}") from exc
 
         if not response.is_success:
             raise LlmClientError(f"LLM call failed: HTTP {response.status_code} {response.text[:400]}")

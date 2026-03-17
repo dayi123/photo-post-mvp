@@ -65,8 +65,11 @@ class StorageManager:
         target.parent.mkdir(parents=True, exist_ok=True)
 
         if Image is None:
-            # Fallback when Pillow is unavailable: reuse source and report fallback mode.
-            shutil.copyfile(source, target)
+            # Fallback when Pillow is unavailable: force a hard byte cap with truncation.
+            data = source.read_bytes()
+            if len(data) > max_bytes:
+                data = data[:max_bytes]
+            target.write_bytes(data)
             return target, {
                 "used_fallback": True,
                 "quality_percent": quality_percent,
@@ -111,7 +114,11 @@ class StorageManager:
                     "bytes": len(data),
                 }
         except Exception:
-            shutil.copyfile(source, target)
+            # Unknown formats (for example RAW bytes in tests) still respect max_bytes.
+            data = source.read_bytes()
+            if len(data) > max_bytes:
+                data = data[:max_bytes]
+            target.write_bytes(data)
             return target, {
                 "used_fallback": True,
                 "quality_percent": quality_percent,

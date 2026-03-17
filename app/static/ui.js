@@ -70,7 +70,6 @@ const I18N = {
     prompt_confirming: "Plan confirmed. Running editor flow...",
     prompt_retrying: "Retry started. Re-running pipeline...",
     prompt_failed_retry_hint: "Job failed. Click Retry to run it again.",
-    prompt_file_too_large: "File is too large. Please keep it under 20MB.",
     prompt_final_ready: "Final image is ready.",
 
     settings_loading: "Settings loaded.",
@@ -146,7 +145,6 @@ const I18N = {
     prompt_confirming: "方案已确认，正在执行处理流程...",
     prompt_retrying: "已开始重试，正在重新执行流程...",
     prompt_failed_retry_hint: "任务失败，可点击重试再次运行。",
-    prompt_file_too_large: "文件过大，请控制在 20MB 以内。",
     prompt_final_ready: "最终图片已生成。",
 
     settings_loading: "配置已加载。",
@@ -483,12 +481,6 @@ uploadForm.addEventListener("submit", async (event) => {
   const file = photoInput.files[0];
   if (!file) {
     setFlash(t("prompt_choose_photo"), true);
-    return;
-  }
-
-  const maxBytes = 20 * 1024 * 1024;
-  if (file.size > maxBytes) {
-    setFlash(`${t("prompt_file_too_large")} (${(file.size / 1024 / 1024).toFixed(1)}MB)`, true);
     return;
   }
 

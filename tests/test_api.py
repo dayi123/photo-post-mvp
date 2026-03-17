@@ -65,22 +65,26 @@ def test_invalid_upload_type_is_rejected(client):
     assert response.status_code == 400
 
 
-def test_large_upload_is_rejected(client):
-    payload = b"0" * (20 * 1024 * 1024 + 1)
-    response = client.post(
-        "/jobs",
-        files={"file": ("sample.jpg", payload, "image/jpeg")},
-    )
-    assert response.status_code == 400
-    assert "under 20MB" in response.json()["detail"]
-
-
 def test_raw_upload_is_accepted_with_octet_stream(client):
     response = client.post(
         "/jobs",
         files={"file": ("sample.dng", b"fake-raw-bytes", "application/octet-stream")},
     )
     assert response.status_code == 201
+
+
+def test_large_upload_is_accepted_and_analysis_input_is_capped(client):
+    payload = b"0" * (21 * 1024 * 1024)
+    response = client.post(
+        "/jobs",
+        files={"file": ("big.jpg", payload, "image/jpeg")},
+    )
+    assert response.status_code == 201
+    job_id = response.json()["id"]
+
+    meta_payload = client.get(f"/jobs/{job_id}/result/meta").json()
+    analysis_audit = _read_audit_record(meta_payload, "analysis_input_exported")
+    assert analysis_audit["payload"]["bytes"] <= 5 * 1024 * 1024
 
 
 def test_result_not_ready_before_confirmation(client):

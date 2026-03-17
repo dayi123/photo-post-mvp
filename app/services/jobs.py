@@ -39,7 +39,6 @@ ALLOWED_TRANSITIONS: dict[JobState, set[JobState]] = {
 
 RAW_EXTENSIONS = {".dng", ".cr2", ".cr3", ".nef", ".arw", ".rw2", ".orf", ".raf", ".pef", ".srw", ".raw"}
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", *RAW_EXTENSIONS}
-MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 
 
 class JobService:
@@ -54,11 +53,6 @@ class JobService:
         payload = upload.file.read()
         if not payload:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded file is empty.")
-        if len(payload) > MAX_UPLOAD_BYTES:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="File is too large. Please keep uploads under 20MB.",
-            )
 
         job = Job(id=str(uuid4()), original_filename=Path(upload.filename or "upload.jpg").name)
         session.add(job)
