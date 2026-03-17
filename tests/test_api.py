@@ -61,6 +61,16 @@ def test_invalid_upload_type_is_rejected(client):
     assert response.status_code == 400
 
 
+def test_large_upload_is_rejected(client):
+    payload = b"0" * (20 * 1024 * 1024 + 1)
+    response = client.post(
+        "/jobs",
+        files={"file": ("sample.jpg", payload, "image/jpeg")},
+    )
+    assert response.status_code == 400
+    assert "under 20MB" in response.json()["detail"]
+
+
 def test_raw_upload_is_accepted_with_octet_stream(client):
     response = client.post(
         "/jobs",

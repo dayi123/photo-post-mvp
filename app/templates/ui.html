@@ -38,7 +38,7 @@
           <form id="upload-form" class="stack">
             <label class="field">
               <span data-i18n="label_photo">Photo</span>
-              <input id="photo-input" name="file" type="file" accept="image/*" required />
+              <input id="photo-input" name="file" type="file" accept="image/*,.dng,.cr2,.cr3,.nef,.arw,.rw2,.orf,.raf,.pef,.srw,.raw" required />
             </label>
             <button id="upload-button" type="submit" data-i18n="btn_upload">Upload photo</button>
           </form>
@@ -73,6 +73,7 @@
           </dl>
           <div class="actions">
             <button id="confirm-button" type="button" disabled hidden data-i18n="btn_confirm_plan">Confirm plan</button>
+            <button id="retry-button" type="button" class="secondary" disabled hidden data-i18n="btn_retry">Retry</button>
           </div>
         </section>
 

@@ -22,6 +22,7 @@ const I18N = {
     tab_settings: "Settings",
     label_photo: "Photo",
     btn_upload: "Upload photo",
+    btn_retry: "Retry",
     job_status_title: "Job status",
     job_status_subtitle: "The pipeline starts with plan generation and waits for confirmation.",
     field_job_id: "Job ID",
@@ -67,6 +68,9 @@ const I18N = {
     prompt_uploading: "Uploading photo and generating plan...",
     prompt_plan_ready: "Plan ready. Review it and confirm when ready.",
     prompt_confirming: "Plan confirmed. Running editor flow...",
+    prompt_retrying: "Retry started. Re-running pipeline...",
+    prompt_failed_retry_hint: "Job failed. Click Retry to run it again.",
+    prompt_file_too_large: "File is too large. Please keep it under 20MB.",
     prompt_final_ready: "Final image is ready.",
 
     settings_loading: "Settings loaded.",
@@ -94,6 +98,7 @@ const I18N = {
     tab_settings: "配置",
     label_photo: "照片",
     btn_upload: "上传照片",
+    btn_retry: "重试",
     job_status_title: "任务状态",
     job_status_subtitle: "流程先生成调整方案，再等待你确认。",
     field_job_id: "任务 ID",
@@ -139,6 +144,9 @@ const I18N = {
     prompt_uploading: "正在上传并生成方案...",
     prompt_plan_ready: "方案已生成，请确认后继续。",
     prompt_confirming: "方案已确认，正在执行处理流程...",
+    prompt_retrying: "已开始重试，正在重新执行流程...",
+    prompt_failed_retry_hint: "任务失败，可点击重试再次运行。",
+    prompt_file_too_large: "文件过大，请控制在 20MB 以内。",
     prompt_final_ready: "最终图片已生成。",
 
     settings_loading: "配置已加载。",
@@ -192,6 +200,7 @@ const uploadForm = document.getElementById("upload-form");
 const photoInput = document.getElementById("photo-input");
 const uploadButton = document.getElementById("upload-button");
 const confirmButton = document.getElementById("confirm-button");
+const retryButton = document.getElementById("retry-button");
 const flash = document.getElementById("flash");
 const jobState = document.getElementById("job-state");
 const jobId = document.getElementById("job-id");
@@ -332,8 +341,11 @@ function renderJob(job) {
   jobError.textContent = job.error_message || "-";
 
   const canConfirm = job.state === "WAIT_USER_CONFIRM";
+  const canRetry = job.state === "FAILED";
   confirmButton.hidden = !canConfirm;
   confirmButton.disabled = !canConfirm;
+  retryButton.hidden = !canRetry;
+  retryButton.disabled = !canRetry;
 }
 
 function showResult(job) {
@@ -452,7 +464,7 @@ async function refreshJob() {
     setFlash(t("prompt_final_ready"));
   } else if (job.state === "FAILED") {
     stopPolling();
-    setFlash(job.error_message || "Job failed.", true);
+    setFlash(t("prompt_failed_retry_hint"), true);
   }
 }
 
@@ -474,10 +486,18 @@ uploadForm.addEventListener("submit", async (event) => {
     return;
   }
 
+  const maxBytes = 20 * 1024 * 1024;
+  if (file.size > maxBytes) {
+    setFlash(`${t("prompt_file_too_large")} (${(file.size / 1024 / 1024).toFixed(1)}MB)`, true);
+    return;
+  }
+
   stopPolling();
   uploadButton.disabled = true;
   confirmButton.hidden = true;
   confirmButton.disabled = true;
+  retryButton.hidden = true;
+  retryButton.disabled = true;
   renderPlan(null);
   showResult({ result_ready: false });
   setFlash(t("prompt_uploading"));
@@ -522,6 +542,42 @@ confirmButton.addEventListener("click", async () => {
     startPolling();
   } catch (error) {
     confirmButton.disabled = false;
+    if (error.message.includes("cannot confirm plan") || error.message.includes("FAILED")) {
+      setFlash(t("prompt_failed_retry_hint"), true);
+      await refreshJob();
+      return;
+    }
+    setFlash(error.message, true);
+  }
+});
+
+retryButton.addEventListener("click", async () => {
+  if (!state.jobId) {
+    return;
+  }
+
+  retryButton.disabled = true;
+  setFlash(t("prompt_retrying"));
+  try {
+    const job = await api(`/jobs/${state.jobId}/retry`, { method: "POST" });
+    renderJob(job);
+    showResult(job);
+
+    if (job.state === "WAIT_USER_CONFIRM") {
+      const plan = await api(`/jobs/${job.id}/plan`);
+      renderPlan(plan);
+      setFlash(t("prompt_plan_ready"));
+      return;
+    }
+
+    if (job.result_ready) {
+      setFlash(t("prompt_final_ready"));
+      return;
+    }
+
+    startPolling();
+  } catch (error) {
+    retryButton.disabled = false;
     setFlash(error.message, true);
   }
 });
