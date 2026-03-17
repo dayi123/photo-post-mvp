@@ -131,7 +131,7 @@ class RuntimeSettingsService:
                 not response.is_success
                 and runtime_config.llm_provider in {"openai", "custom"}
                 and request["url"].endswith("/responses")
-                and response.status_code in {404, 405, 422}
+                and response.status_code in {404, 405, 422, 500}
             ):
                 fallback_request = self._build_openai_chat_completions_request(runtime_config)
                 fallback_response = self._perform_llm_request(fallback_request)
