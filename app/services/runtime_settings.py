@@ -234,6 +234,15 @@ class RuntimeSettingsService:
             contract_summary=rendered.contract_summary,
         )
 
+    def build_review_request_payload(self, config: RuntimeConfig, review_round: int) -> dict[str, Any]:
+        prompt = (
+            "You are the quality review stage for a photo editing workflow. "
+            "Return JSON only with keys: decision (approved|revise), approved (bool), "
+            "score (0-100), notes (1-5 items), next_focus (string|null). "
+            f"Current review_round: {review_round}."
+        )
+        return self._build_stage_request_payload(config, prompt, pack="default")
+
     def _write(self, config: RuntimeConfig) -> None:
         self.path.write_text(json.dumps(config.model_dump(mode="json"), indent=2), encoding="utf-8")
 
@@ -300,44 +309,37 @@ class RuntimeSettingsService:
 
     def _build_llm_request(self, config: RuntimeConfig) -> dict[str, Any]:
         if config.llm_provider == "google":
-            base_url = self._join_base_url(config.llm_base_url or "https://generativelanguage.googleapis.com/v1beta")
-            model_name = config.llm_model if config.llm_model.startswith("models/") else f"models/{config.llm_model}"
-            return {
-                "method": "POST",
-                "url": f"{base_url}/{model_name}:generateContent",
-                "params": {"key": config.llm_api_key},
-                "headers": {"Content-Type": "application/json"},
-                "json": {
-                    "contents": [{"parts": [{"text": "ping"}]}],
-                    "generationConfig": {"maxOutputTokens": 1},
-                },
-            }
+            return self._build_google_generate_content_request(
+                config,
+                [{"text": "ping"}],
+                max_output_tokens=1,
+            )
 
-        base_root = config.llm_base_url
-        if config.llm_provider == "openai":
-            base_root = base_root or "https://api.openai.com/v1"
-        elif not base_root:
-            raise httpx.RequestError("llm_base_url is required when llm_provider=custom.")
+        return self._build_openai_responses_request(
+            config,
+            [{"type": "input_text", "text": "ping"}],
+            max_output_tokens=1,
+        )
 
-        base_url = self._join_base_url(base_root)
-        if base_url.endswith("/chat/completions") or base_url.endswith("/responses"):
-            endpoint = base_url
+    def build_llm_execute_request(self, config: RuntimeConfig, payload: dict[str, Any]) -> dict[str, Any]:
+        if config.llm_provider == "google":
+            return self._build_google_generate_content_request(
+                config,
+                payload["contents"][0]["parts"],
+                max_output_tokens=512,
+            )
+
+        input_payload = payload.get("input")
+        if isinstance(input_payload, list):
+            normalized_input = input_payload[0].get("content", [])
         else:
-            endpoint = f"{base_url}/responses"
+            normalized_input = [{"type": "input_text", "text": str(input_payload or "")}]
 
-        return {
-            "method": "POST",
-            "url": endpoint,
-            "headers": {
-                "Authorization": f"Bearer {config.llm_api_key}",
-                "Content-Type": "application/json",
-            },
-            "json": {
-                "model": config.llm_model,
-                "input": "ping",
-                "max_output_tokens": 1,
-            },
-        }
+        return self._build_openai_responses_request(
+            config,
+            normalized_input,
+            max_output_tokens=1024,
+        )
 
     def _build_openai_chat_completions_request(self, config: RuntimeConfig) -> dict[str, Any]:
         base_root = config.llm_base_url
@@ -359,6 +361,66 @@ class RuntimeSettingsService:
                 "model": config.llm_model,
                 "messages": [{"role": "user", "content": "ping"}],
                 "max_tokens": 1,
+            },
+        }
+
+    def _build_google_generate_content_request(
+        self,
+        config: RuntimeConfig,
+        parts: list[dict[str, Any]],
+        *,
+        max_output_tokens: int,
+    ) -> dict[str, Any]:
+        base_url = self._join_base_url(config.llm_base_url or "https://generativelanguage.googleapis.com/v1beta")
+        model_name = config.llm_model if config.llm_model.startswith("models/") else f"models/{config.llm_model}"
+        return {
+            "method": "POST",
+            "url": f"{base_url}/{model_name}:generateContent",
+            "params": {"key": config.llm_api_key},
+            "headers": {"Content-Type": "application/json"},
+            "json": {
+                "contents": [{"parts": parts}],
+                "generationConfig": {"maxOutputTokens": max_output_tokens},
+            },
+        }
+
+    def _build_openai_responses_request(
+        self,
+        config: RuntimeConfig,
+        input_content: list[dict[str, Any]],
+        *,
+        max_output_tokens: int,
+    ) -> dict[str, Any]:
+        base_root = config.llm_base_url
+        if config.llm_provider == "openai":
+            base_root = base_root or "https://api.openai.com/v1"
+        elif not base_root:
+            raise httpx.RequestError("llm_base_url is required when llm_provider=custom.")
+
+        base_url = self._join_base_url(base_root)
+        if base_url.endswith("/responses"):
+            endpoint = base_url
+        elif base_url.endswith("/chat/completions"):
+            endpoint = base_url[: -len("/chat/completions")] + "/responses"
+        else:
+            endpoint = f"{base_url}/responses"
+
+        return {
+            "method": "POST",
+            "url": endpoint,
+            "headers": {
+                "Authorization": f"Bearer {config.llm_api_key}",
+                "Content-Type": "application/json",
+            },
+            "json": {
+                "model": config.llm_model,
+                "input": [
+                    {
+                        "role": "user",
+                        "content": input_content,
+                    }
+                ],
+                "max_output_tokens": max_output_tokens,
             },
         }
 

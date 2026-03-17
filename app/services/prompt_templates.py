@@ -16,20 +16,20 @@ class RenderedPrompt:
 PLAN_TEMPLATES: dict[TemplatePackName, str] = {
     "gpt-5.4": (
         "You are the planning stage in a two-stage photo editing workflow.\n"
-        "Produce idea-level guidance only. Do not execute edits, call tools, or emit JSON.\n"
-        "Return a concise plan with summary, goals, risks, ordered steps, and estimated_minutes.\n"
+        "Produce idea-level guidance only. Do not execute edits. Output strict JSON only (no markdown, no prose).\n"
+        "JSON contract keys: summary, goals, risks, steps[{{order,title,instruction}}], estimated_minutes.\n"
         "Source photo filename: {original_filename}"
     ),
     "gemini-3.1": (
         "Role: planning stage for a photo editing assistant.\n"
-        "Stay at the intent level. Do not produce executable actions or machine JSON.\n"
-        "Describe the approved direction using summary, goals, risks, numbered steps, and estimated_minutes.\n"
+        "Keep the content conceptual, then return valid JSON only (no code fences).\n"
+        "JSON contract keys: summary, goals, risks, steps[{{order,title,instruction}}], estimated_minutes.\n"
         "Input filename: {original_filename}"
     ),
     "default": (
         "Create a brief photo-edit plan for the uploaded image.\n"
-        "This is the planning stage only, so keep it conceptual and non-executable.\n"
-        "Include summary, goals, risks, ordered steps, and estimated_minutes.\n"
+        "Planning stage only; keep recommendations conceptual and non-destructive.\n"
+        "Output JSON only with keys: summary, goals, risks, steps[{{order,title,instruction}}], estimated_minutes.\n"
         "Filename: {original_filename}"
     ),
 }
@@ -39,6 +39,7 @@ ACTION_TEMPLATES: dict[TemplatePackName, str] = {
         "You are the action stage in a two-stage photo editing workflow.\n"
         "Convert the approved plan into edit instructions.\n"
         "Return strict JSON only. No markdown, no prose, no code fences.\n"
+        "If this is review round > 1, make the edit slightly more conservative.\n"
         "Review round: {review_round}\n"
         "{plan_context}\n"
         "JSON contract summary:\n"

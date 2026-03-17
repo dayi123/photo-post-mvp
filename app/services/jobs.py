@@ -13,6 +13,7 @@ from app.models import Job
 from app.schemas import Action, JobRead, JobState, Plan, Review, RuntimeConfig
 from app.services import llm_stub, prompt_templates
 from app.services.editor_adapters import build_editor_adapter
+from app.services.llm_client import LlmClient, LlmClientError
 from app.services.runtime_settings import RuntimeSettingsService
 from app.storage import StorageManager
 
@@ -46,6 +47,7 @@ class JobService:
         self.storage = StorageManager()
         self.settings = get_settings()
         self.runtime_settings = RuntimeSettingsService(self.settings)
+        self.llm_client = LlmClient()
 
     def create_job(self, session: Session, upload: UploadFile) -> Job:
         self._validate_upload(upload)
@@ -79,7 +81,7 @@ class JobService:
             job.id,
             "llm_execution_mode",
             job.state,
-            self.runtime_settings.llm_stub_audit_payload(runtime_config),
+            self._llm_mode_audit_payload(runtime_config),
         )
 
         try:
@@ -211,7 +213,7 @@ class JobService:
             job.original_filename,
             analysis_image_path=analysis_path,
         )
-        plan = llm_stub.generate_plan(job.original_filename)
+        plan, plan_execution = self._generate_plan(runtime_config, job.original_filename, plan_request_payload)
         job.plan_json = plan.model_dump_json()
         self._transition(job, session, JobState.PLAN_GENERATED)
         self.storage.write_audit(
@@ -220,7 +222,7 @@ class JobService:
             job.state,
             {
                 "plan": json.loads(plan.model_dump_json()),
-                "llm_execution": self.runtime_settings.llm_stub_audit_payload(runtime_config),
+                "llm_execution": plan_execution,
                 "prompt_template": {
                     "selected_pack": plan_prompt.pack,
                     "rendered_prompt": plan_prompt.text,
@@ -254,7 +256,12 @@ class JobService:
                 model=runtime_config.llm_model,
                 override=runtime_config.action_template_pack,
             )
-            action = llm_stub.generate_action(plan, round_number)
+            action_request_payload = self.runtime_settings.build_action_request_payload(
+                runtime_config,
+                plan,
+                round_number,
+            )
+            action, action_execution = self._generate_action(runtime_config, plan, round_number, action_request_payload)
             job.action_json = action.model_dump_json()
             self._persist(job, session)
             self.storage.write_audit(
@@ -263,12 +270,13 @@ class JobService:
                 job.state,
                 {
                     "action": json.loads(action.model_dump_json()),
-                    "llm_execution": self.runtime_settings.llm_stub_audit_payload(runtime_config),
+                    "llm_execution": action_execution,
                     "prompt_template": {
                         "selected_pack": action_prompt.pack,
                         "rendered_prompt": action_prompt.text,
                         "json_schema_contract_summary": action_prompt.contract_summary,
                     },
+                    "prepared_request_payload": action_request_payload,
                 },
             )
 
@@ -288,7 +296,8 @@ class JobService:
                 {"preview_2_path": str(preview_2)},
             )
 
-            review = llm_stub.review_output(round_number)
+            review_request_payload = self.runtime_settings.build_review_request_payload(runtime_config, round_number)
+            review, review_execution = self._review_output(runtime_config, round_number, review_request_payload)
             job.review_json = review.model_dump_json()
             job.review_rounds = round_number
             self._transition(job, session, JobState.QUALITY_CHECKED)
@@ -298,7 +307,8 @@ class JobService:
                 job.state,
                 {
                     "review": json.loads(review.model_dump_json()),
-                    "llm_execution": self.runtime_settings.llm_stub_audit_payload(runtime_config),
+                    "llm_execution": review_execution,
+                    "prepared_request_payload": review_request_payload,
                 },
             )
 
@@ -317,6 +327,90 @@ class JobService:
 
         if not approved:
             self._fail_job(job, session, "Maximum review rounds reached without approval.")
+
+    def _generate_plan(
+        self,
+        runtime_config: RuntimeConfig,
+        original_filename: str,
+        prepared_payload: dict[str, object],
+    ) -> tuple[Plan, dict[str, object]]:
+        if not runtime_config.llm_api_key:
+            return llm_stub.generate_plan(original_filename), self.runtime_settings.llm_stub_audit_payload(runtime_config)
+
+        request = self.runtime_settings.build_llm_execute_request(runtime_config, prepared_payload)
+        try:
+            plan = self.llm_client.generate_plan(request, runtime_config.llm_provider)
+            return plan, {
+                "execution_backend": "remote_llm",
+                "configured_provider": runtime_config.llm_provider,
+                "configured_model": runtime_config.llm_model,
+                "llm_api_key_configured": True,
+                "note": "Plan generated via remote LLM.",
+            }
+        except (LlmClientError, ValueError) as exc:
+            fallback = self.runtime_settings.llm_stub_audit_payload(runtime_config)
+            fallback["note"] = f"Remote LLM failed for plan; used local stub fallback. reason={exc}"
+            return llm_stub.generate_plan(original_filename), fallback
+
+    def _generate_action(
+        self,
+        runtime_config: RuntimeConfig,
+        plan: Plan,
+        review_round: int,
+        prepared_payload: dict[str, object],
+    ) -> tuple[Action, dict[str, object]]:
+        if not runtime_config.llm_api_key:
+            return llm_stub.generate_action(plan, review_round), self.runtime_settings.llm_stub_audit_payload(runtime_config)
+
+        request = self.runtime_settings.build_llm_execute_request(runtime_config, prepared_payload)
+        try:
+            action = self.llm_client.generate_action(request, runtime_config.llm_provider)
+            return action, {
+                "execution_backend": "remote_llm",
+                "configured_provider": runtime_config.llm_provider,
+                "configured_model": runtime_config.llm_model,
+                "llm_api_key_configured": True,
+                "note": "Action generated via remote LLM.",
+            }
+        except (LlmClientError, ValueError) as exc:
+            fallback = self.runtime_settings.llm_stub_audit_payload(runtime_config)
+            fallback["note"] = f"Remote LLM failed for action; used local stub fallback. reason={exc}"
+            return llm_stub.generate_action(plan, review_round), fallback
+
+    def _review_output(
+        self,
+        runtime_config: RuntimeConfig,
+        review_round: int,
+        prepared_payload: dict[str, object],
+    ) -> tuple[Review, dict[str, object]]:
+        if not runtime_config.llm_api_key:
+            return llm_stub.review_output(review_round), self.runtime_settings.llm_stub_audit_payload(runtime_config)
+
+        request = self.runtime_settings.build_llm_execute_request(runtime_config, prepared_payload)
+        try:
+            review = self.llm_client.review_output(request, runtime_config.llm_provider)
+            return review, {
+                "execution_backend": "remote_llm",
+                "configured_provider": runtime_config.llm_provider,
+                "configured_model": runtime_config.llm_model,
+                "llm_api_key_configured": True,
+                "note": "Review generated via remote LLM.",
+            }
+        except (LlmClientError, ValueError) as exc:
+            fallback = self.runtime_settings.llm_stub_audit_payload(runtime_config)
+            fallback["note"] = f"Remote LLM failed for review; used local stub fallback. reason={exc}"
+            return llm_stub.review_output(review_round), fallback
+
+    def _llm_mode_audit_payload(self, runtime_config: RuntimeConfig) -> dict[str, object]:
+        if runtime_config.llm_api_key:
+            return {
+                "execution_backend": "remote_llm_with_stub_fallback",
+                "configured_provider": runtime_config.llm_provider,
+                "configured_model": runtime_config.llm_model,
+                "llm_api_key_configured": True,
+                "note": "Remote LLM is enabled. Stub is only used as fallback when remote parsing/call fails.",
+            }
+        return self.runtime_settings.llm_stub_audit_payload(runtime_config)
 
     def _validate_upload(self, upload: UploadFile) -> None:
         filename = upload.filename or ""
