@@ -14,6 +14,7 @@ from app.config import get_settings
 from app.db import get_session, init_db
 from app.schemas import (
     ConfirmPlanRequest,
+    CreateJobFromPathRequest,
     JobRead,
     JobState,
     Plan,
@@ -75,6 +76,14 @@ def create_app() -> FastAPI:
         file: UploadFile = File(...),
     ):
         job = service.create_job(session, file)
+        return service.to_read(job)
+
+    @app.post("/jobs/from-path", status_code=status.HTTP_201_CREATED, response_model=JobRead)
+    def create_job_from_path(
+        request: CreateJobFromPathRequest,
+        session: Annotated[Session, Depends(get_session)],
+    ):
+        job = service.create_job_from_local_path(session, request.path)
         return service.to_read(job)
 
     @app.get("/jobs/{job_id}", response_model=JobRead)

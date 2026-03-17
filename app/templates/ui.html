@@ -38,9 +38,16 @@
           <form id="upload-form" class="stack">
             <label class="field">
               <span data-i18n="label_photo">Photo</span>
-              <input id="photo-input" name="file" type="file" accept="image/*,.dng,.cr2,.cr3,.nef,.arw,.rw2,.orf,.raf,.pef,.srw,.raw" required />
+              <input id="photo-input" name="file" type="file" accept="image/*,.dng,.cr2,.cr3,.nef,.arw,.rw2,.orf,.raf,.pef,.srw,.raw" />
             </label>
             <button id="upload-button" type="submit" data-i18n="btn_upload">Upload photo</button>
+          </form>
+          <form id="local-path-form" class="stack">
+            <label class="field">
+              <span data-i18n="label_local_path">Local photo path</span>
+              <input id="local-path-input" type="text" placeholder="D:/Photos/IMG_0001.CR3" />
+            </label>
+            <button id="local-path-button" type="submit" class="secondary" data-i18n="btn_use_local_path">Use local path</button>
           </form>
           <p id="flash" class="flash" role="status"></p>
         </section>

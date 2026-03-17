@@ -54,39 +54,32 @@ class JobService:
         if not payload:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded file is empty.")
 
-        job = Job(id=str(uuid4()), original_filename=Path(upload.filename or "upload.jpg").name)
-        session.add(job)
-        session.commit()
-        session.refresh(job)
-
+        job = self._create_empty_job(session, Path(upload.filename or "upload.jpg").name)
         original_path = self.storage.save_original(job.id, job.original_filename, payload)
         job.original_path = str(original_path)
-        runtime_config = self.runtime_settings.load()
-        job.runtime_settings_json = runtime_config.model_dump_json()
-        self._persist(job, session)
-        self.storage.write_audit(job.id, "job_received", job.state, {"filename": job.original_filename})
-        self.storage.write_audit(
-            job.id,
-            "runtime_settings_snapshot",
-            job.state,
-            self.runtime_settings.to_audit_payload(runtime_config),
-        )
-        self.storage.write_audit(
-            job.id,
-            "llm_execution_mode",
-            job.state,
-            self._llm_mode_audit_payload(runtime_config),
-        )
+        return self._run_created_job(session, job)
 
-        try:
-            self._run_stage_a(job, session)
-        except HTTPException:
-            raise
-        except Exception as exc:
-            self._fail_job(job, session, str(exc))
-            raise HTTPException(status_code=500, detail=f"Stage A failed: {exc}") from exc
+    def create_job_from_local_path(self, session: Session, local_path: str) -> Job:
+        source = Path(local_path).expanduser()
+        if not source.exists() or not source.is_file():
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Local photo path does not exist.")
 
-        return self._refresh(session, job.id)
+        suffix = source.suffix.lower()
+        if suffix not in ALLOWED_EXTENSIONS:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Unsupported file type. Use jpg, jpeg, png, webp, or common RAW formats.",
+            )
+
+        payload = source.read_bytes()
+        if not payload:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Selected local file is empty.")
+
+        job = self._create_empty_job(session, source.name)
+        original_path = self.storage.save_original(job.id, source.name, payload)
+        job.original_path = str(original_path)
+        self.storage.write_audit(job.id, "local_path_selected", job.state, {"source_path": str(source)})
+        return self._run_created_job(session, job)
 
     def get_job(self, session: Session, job_id: str) -> Job:
         job = session.get(Job, job_id)
@@ -134,7 +127,16 @@ class JobService:
         job.review_rounds = 0
         job.action_json = None
         job.review_json = None
+
+        latest_runtime_config = self.runtime_settings.load()
+        job.runtime_settings_json = latest_runtime_config.model_dump_json()
         self._persist(job, session)
+        self.storage.write_audit(
+            job.id,
+            "runtime_settings_snapshot_retry",
+            job.state,
+            self.runtime_settings.to_audit_payload(latest_runtime_config),
+        )
 
         try:
             if job.plan_json:
@@ -464,6 +466,41 @@ class JobService:
         else:
             self._persist(job, session)
         self.storage.write_audit(job.id, "failed", job.state, {"error_message": message})
+
+    def _create_empty_job(self, session: Session, filename: str) -> Job:
+        job = Job(id=str(uuid4()), original_filename=filename)
+        session.add(job)
+        session.commit()
+        session.refresh(job)
+        return job
+
+    def _run_created_job(self, session: Session, job: Job) -> Job:
+        runtime_config = self.runtime_settings.load()
+        job.runtime_settings_json = runtime_config.model_dump_json()
+        self._persist(job, session)
+        self.storage.write_audit(job.id, "job_received", job.state, {"filename": job.original_filename})
+        self.storage.write_audit(
+            job.id,
+            "runtime_settings_snapshot",
+            job.state,
+            self.runtime_settings.to_audit_payload(runtime_config),
+        )
+        self.storage.write_audit(
+            job.id,
+            "llm_execution_mode",
+            job.state,
+            self._llm_mode_audit_payload(runtime_config),
+        )
+
+        try:
+            self._run_stage_a(job, session)
+        except HTTPException:
+            raise
+        except Exception as exc:
+            self._fail_job(job, session, str(exc))
+            raise HTTPException(status_code=500, detail=f"Stage A failed: {exc}") from exc
+
+        return self._refresh(session, job.id)
 
     def _resolve_adapter_output_path(self, adapter_result: dict[str, object]) -> Path | None:
         raw_path = adapter_result.get("output_path") if isinstance(adapter_result, dict) else None

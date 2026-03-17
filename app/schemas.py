@@ -88,6 +88,10 @@ class ConfirmPlanRequest(BaseModel):
     user_notes: str | None = Field(default=None, max_length=300)
 
 
+class CreateJobFromPathRequest(BaseModel):
+    path: str = Field(min_length=1, max_length=1000)
+
+
 class JobRead(BaseModel):
     id: str
     state: JobState

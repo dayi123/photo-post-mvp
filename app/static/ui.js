@@ -21,7 +21,9 @@ const I18N = {
     tab_workbench: "Workbench",
     tab_settings: "Settings",
     label_photo: "Photo",
+    label_local_path: "Local photo path",
     btn_upload: "Upload photo",
+    btn_use_local_path: "Use local path",
     btn_retry: "Retry",
     job_status_title: "Job status",
     job_status_subtitle: "The pipeline starts with plan generation and waits for confirmation.",
@@ -96,7 +98,9 @@ const I18N = {
     tab_workbench: "工作台",
     tab_settings: "配置",
     label_photo: "照片",
+    label_local_path: "本地照片路径",
     btn_upload: "上传照片",
+    btn_use_local_path: "使用本地路径",
     btn_retry: "重试",
     job_status_title: "任务状态",
     job_status_subtitle: "流程先生成调整方案，再等待你确认。",
@@ -197,6 +201,9 @@ const panelSettings = document.getElementById("panel-settings");
 const uploadForm = document.getElementById("upload-form");
 const photoInput = document.getElementById("photo-input");
 const uploadButton = document.getElementById("upload-button");
+const localPathForm = document.getElementById("local-path-form");
+const localPathInput = document.getElementById("local-path-input");
+const localPathButton = document.getElementById("local-path-button");
 const confirmButton = document.getElementById("confirm-button");
 const retryButton = document.getElementById("retry-button");
 const flash = document.getElementById("flash");
@@ -508,6 +515,43 @@ uploadForm.addEventListener("submit", async (event) => {
     setFlash(error.message, true);
   } finally {
     uploadButton.disabled = false;
+  }
+});
+
+localPathForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const pathValue = localPathInput.value.trim();
+  if (!pathValue) {
+    setFlash("Please enter a local photo path.", true);
+    return;
+  }
+
+  stopPolling();
+  localPathButton.disabled = true;
+  confirmButton.hidden = true;
+  confirmButton.disabled = true;
+  retryButton.hidden = true;
+  retryButton.disabled = true;
+  renderPlan(null);
+  showResult({ result_ready: false });
+  setFlash(t("prompt_uploading"));
+
+  try {
+    const job = await api("/jobs/from-path", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path: pathValue }),
+    });
+    state.jobId = job.id;
+    renderJob(job);
+    showResult(job);
+    const plan = await api(`/jobs/${job.id}/plan`);
+    renderPlan(plan);
+    setFlash(t("prompt_plan_ready"));
+  } catch (error) {
+    setFlash(error.message, true);
+  } finally {
+    localPathButton.disabled = false;
   }
 });
 

@@ -73,6 +73,14 @@ def test_raw_upload_is_accepted_with_octet_stream(client):
     assert response.status_code == 201
 
 
+def test_create_job_from_local_path(client, tmp_path: Path):
+    photo = tmp_path / "local.jpg"
+    photo.write_bytes(b"local-image-bytes")
+    response = client.post("/jobs/from-path", json={"path": str(photo)})
+    assert response.status_code == 201
+    assert response.json()["original_filename"] == "local.jpg"
+
+
 def test_large_upload_is_accepted_and_analysis_input_is_capped(client):
     payload = b"0" * (21 * 1024 * 1024)
     response = client.post(
@@ -219,6 +227,61 @@ def test_settings_test_editor_supports_stub_and_davinci(client, tmp_path: Path):
     assert davinci_payload["success"] is True
     assert davinci_payload["backend"] == "davinci"
     assert '"round": 0' in davinci_payload["detail"]
+
+
+def test_retry_uses_latest_runtime_settings(client, tmp_path: Path):
+    bad_settings = client.put(
+        "/settings",
+        json={
+            "editor_backend": "davinci",
+            "davinci_cmd": "",
+            "davinci_input_mode": "stdin",
+            "davinci_timeout_seconds": 10,
+        },
+    )
+    assert bad_settings.status_code == 200
+
+    created = client.post(
+        "/jobs",
+        files={"file": ("sample.jpg", b"fake-image-bytes", "image/jpeg")},
+    )
+    assert created.status_code == 201
+    job_id = created.json()["id"]
+
+    failed = client.post(f"/jobs/{job_id}/confirm-plan", json={"confirmed": True})
+    assert failed.status_code == 500
+
+    script_path = tmp_path / "davinci_retry.py"
+    script_path.write_text(
+        "\n".join(
+            [
+                "import json",
+                "import sys",
+                "payload = json.load(sys.stdin)",
+                "json.dump({'output_path': None, 'round': payload['round']}, sys.stdout)",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    good_settings = client.put(
+        "/settings",
+        json={
+            "editor_backend": "davinci",
+            "davinci_cmd": f'\"{sys.executable}\" \"{script_path}\"',
+            "davinci_input_mode": "stdin",
+            "davinci_timeout_seconds": 10,
+        },
+    )
+    assert good_settings.status_code == 200
+
+    retry = client.post(f"/jobs/{job_id}/retry")
+    assert retry.status_code == 200
+    assert retry.json()["state"] in {"FAILED", "DELIVERED_ARCHIVED"}
+
+    meta_payload = client.get(f"/jobs/{job_id}/result/meta").json()
+    snapshot_retry = _read_audit_record(meta_payload, "runtime_settings_snapshot_retry")
+    assert "davinci_retry.py" in (snapshot_retry["payload"].get("davinci_cmd") or "")
 
 
 def test_job_audit_settings_snapshot_masks_api_key(client):
