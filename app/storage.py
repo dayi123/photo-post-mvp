@@ -3,10 +3,16 @@ from __future__ import annotations
 import json
 import shutil
 from datetime import datetime
+from io import BytesIO
 from pathlib import Path
 
 from app.config import get_settings
 from app.schemas import AuditRecord, JobState
+
+try:  # pragma: no cover - import guard for minimal environments
+    from PIL import Image
+except Exception:  # pragma: no cover
+    Image = None
 
 
 class StorageManager:
@@ -38,11 +44,80 @@ class StorageManager:
     def preview_1_path(self, job_id: str) -> Path:
         return self.job_dir(job_id) / "preview_1.jpg"
 
+    def analysis_path(self, job_id: str) -> Path:
+        return self.job_dir(job_id) / "analysis_input.jpg"
+
     def preview_2_path(self, job_id: str) -> Path:
         return self.job_dir(job_id) / "preview_2.jpg"
 
     def final_path(self, job_id: str) -> Path:
         return self.job_dir(job_id) / "final.jpg"
+
+    def export_analysis_jpeg(
+        self,
+        source: Path,
+        target: Path,
+        *,
+        max_bytes: int = 5 * 1024 * 1024,
+        quality_percent: int = 10,
+        max_dimension: int = 2048,
+    ) -> tuple[Path, dict[str, int | bool]]:
+        target.parent.mkdir(parents=True, exist_ok=True)
+
+        if Image is None:
+            # Fallback when Pillow is unavailable: reuse source and report fallback mode.
+            shutil.copyfile(source, target)
+            return target, {
+                "used_fallback": True,
+                "quality_percent": quality_percent,
+                "max_dimension": max_dimension,
+                "bytes": target.stat().st_size,
+            }
+
+        try:
+            with Image.open(source) as img:
+                converted = img.convert("RGB")
+                width, height = converted.size
+                longest = max(width, height)
+                if longest > max_dimension:
+                    scale = max_dimension / float(longest)
+                    resized = converted.resize((int(width * scale), int(height * scale)))
+                else:
+                    resized = converted
+
+                quality = max(5, min(95, int(quality_percent)))
+                data: bytes | None = None
+                while quality >= 5:
+                    buffer = BytesIO()
+                    resized.save(buffer, format="JPEG", quality=quality, optimize=True)
+                    candidate = buffer.getvalue()
+                    if len(candidate) <= max_bytes:
+                        data = candidate
+                        break
+                    quality -= 5
+
+                if data is None:
+                    # As a hard cap fallback, force tiny dimensions and low quality.
+                    tiny = resized.resize((min(1024, resized.width), min(1024, resized.height)))
+                    buffer = BytesIO()
+                    tiny.save(buffer, format="JPEG", quality=5, optimize=True)
+                    data = buffer.getvalue()
+
+                target.write_bytes(data)
+                return target, {
+                    "used_fallback": False,
+                    "quality_percent": quality,
+                    "max_dimension": max_dimension,
+                    "bytes": len(data),
+                }
+        except Exception:
+            shutil.copyfile(source, target)
+            return target, {
+                "used_fallback": True,
+                "quality_percent": quality_percent,
+                "max_dimension": max_dimension,
+                "bytes": target.stat().st_size,
+            }
 
     def write_audit(self, job_id: str, kind: str, state: JobState, payload: dict) -> Path:
         audit_dir = self.ensure_job_dirs(job_id) / "audit"

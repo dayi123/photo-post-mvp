@@ -185,6 +185,22 @@ class JobService:
         self._transition(job, session, JobState.PREVIEW_1_EXPORTED)
         self.storage.write_audit(job.id, "preview_1_exported", job.state, {"preview_1_path": str(preview_1)})
 
+        analysis_path, analysis_meta = self.storage.export_analysis_jpeg(
+            original_path,
+            self.storage.analysis_path(job.id),
+            max_bytes=5 * 1024 * 1024,
+            quality_percent=10,
+        )
+        self.storage.write_audit(
+            job.id,
+            "analysis_input_exported",
+            job.state,
+            {
+                "analysis_input_path": str(analysis_path),
+                **analysis_meta,
+            },
+        )
+
         plan_prompt = prompt_templates.build_plan_prompt(
             original_filename=job.original_filename,
             model=runtime_config.llm_model,

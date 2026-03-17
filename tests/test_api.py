@@ -48,6 +48,10 @@ def test_job_lifecycle(client):
     assert meta_payload["review"]["approved"] is True
     assert len(meta_payload["audit_files"]) >= 8
 
+    analysis_audit = _read_audit_record(meta_payload, "analysis_input_exported")
+    assert analysis_audit["payload"]["analysis_input_path"].endswith("analysis_input.jpg")
+    assert analysis_audit["payload"]["bytes"] <= 5 * 1024 * 1024
+
     result_response = client.get(f"/jobs/{job_id}/result")
     assert result_response.status_code == 200
     assert result_response.content == b"fake-image-bytes"
