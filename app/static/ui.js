@@ -4,7 +4,12 @@ const state = {
   language: "en",
 };
 
-const MODEL_PRESETS = ["gpt-5.4", "gemini-3.1"];
+const MODEL_PRESETS = [
+  "gemini-3.1-pro-preview",
+  "gemini-3-pro-preview",
+  "gpt-5.4",
+  "gemini-3.1",
+];
 const TAB_IDS = ["workbench", "settings"];
 
 const I18N = {

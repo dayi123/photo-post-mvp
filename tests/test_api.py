@@ -84,8 +84,8 @@ def test_settings_crud_masks_key_and_persists(client):
     assert initial_response.json()["llm_api_key_masked"] is None
     assert initial_response.json()["plan_template_pack"] == "auto"
     assert initial_response.json()["action_template_pack"] == "auto"
-    assert initial_response.json()["effective_plan_template_pack"] == "gpt-5.4"
-    assert initial_response.json()["effective_action_template_pack"] == "gpt-5.4"
+    assert initial_response.json()["effective_plan_template_pack"] == "gemini-3.1"
+    assert initial_response.json()["effective_action_template_pack"] == "gemini-3.1"
 
     update_payload = {
         "llm_provider": "custom",
@@ -185,7 +185,7 @@ def test_job_audit_settings_snapshot_masks_api_key(client):
         "/settings",
         json={
             "llm_provider": "openai",
-            "llm_model": "gpt-5.4",
+            "llm_model": "gemini-3.1-pro-preview",
             "llm_api_key": "sk-live-987654",
         },
     )
