@@ -17,7 +17,7 @@ class Settings(BaseModel):
     default_llm_api_key: str | None = None
     default_llm_base_url: str | None = "https://new.lemonapi.site/v1"
     default_editor_backend: str = "stub"
-    default_davinci_cmd: str | None = None
+    default_davinci_cmd: str | None = "py -3 scripts/davinci_bridge.py"
     default_davinci_input_mode: str = "stdin"
     default_davinci_timeout_seconds: int = 60
 
@@ -37,7 +37,7 @@ def get_settings() -> Settings:
         default_llm_api_key=os.getenv("PHOTO_POST_LLM_API_KEY"),
         default_llm_base_url=os.getenv("PHOTO_POST_LLM_BASE_URL", "https://new.lemonapi.site/v1"),
         default_editor_backend=os.getenv("PHOTO_POST_EDITOR", "stub"),
-        default_davinci_cmd=os.getenv("PHOTO_POST_DAVINCI_CMD"),
+        default_davinci_cmd=os.getenv("PHOTO_POST_DAVINCI_CMD", "py -3 scripts/davinci_bridge.py"),
         default_davinci_input_mode=os.getenv("PHOTO_POST_DAVINCI_INPUT_MODE", "stdin"),
         default_davinci_timeout_seconds=int(os.getenv("PHOTO_POST_DAVINCI_TIMEOUT_SECONDS", "60")),
     )
