@@ -124,8 +124,14 @@ def test_settings_crud_masks_key_and_persists(client):
     assert follow_up_json["effective_plan_template_pack"] == "gemini-3.1"
     assert follow_up_json["effective_action_template_pack"] == "default"
 
+    clear_key_response = client.put("/settings", json={"llm_api_key": ""})
+    assert clear_key_response.status_code == 200
+    clear_key_json = clear_key_response.json()
+    assert clear_key_json["llm_api_key_configured"] is False
+    assert clear_key_json["llm_api_key_masked"] is None
+
     reloaded = json.loads(settings_path.read_text(encoding="utf-8"))
-    assert reloaded["llm_api_key"] == "sk-test-123456"
+    assert reloaded["llm_api_key"] is None
     assert reloaded["llm_model"] == "relay-model-v2"
 
 

@@ -38,15 +38,13 @@ class RuntimeSettingsService:
             return config
 
         raw = json.loads(self.path.read_text(encoding="utf-8"))
-        config = RuntimeConfig.model_validate(raw)
-        self._write(config)
-        return config
+        return RuntimeConfig.model_validate(raw)
 
     def update(self, patch: RuntimeConfigUpdate) -> RuntimeConfig:
         current = self.load()
         updates = patch.model_dump(exclude_unset=True)
-        if updates.get("llm_api_key", None) == "":
-            updates.pop("llm_api_key")
+        if "llm_api_key" in updates and updates["llm_api_key"] == "":
+            updates["llm_api_key"] = None
         merged = current.model_dump()
         merged.update(updates)
         config = RuntimeConfig.model_validate(merged)
@@ -128,6 +126,18 @@ class RuntimeSettingsService:
         try:
             request = self._build_llm_request(runtime_config)
             response = self._perform_llm_request(request)
+            request_used = request
+            if (
+                not response.is_success
+                and runtime_config.llm_provider in {"openai", "custom"}
+                and request["url"].endswith("/responses")
+                and response.status_code in {404, 405, 422}
+            ):
+                fallback_request = self._build_openai_chat_completions_request(runtime_config)
+                fallback_response = self._perform_llm_request(fallback_request)
+                if fallback_response.is_success:
+                    response = fallback_response
+                    request_used = fallback_request
         except httpx.HTTPError as exc:
             return SettingsTestResult(
                 success=False,
@@ -144,7 +154,7 @@ class RuntimeSettingsService:
                 success=True,
                 provider=runtime_config.llm_provider,
                 model=runtime_config.llm_model,
-                endpoint=request["url"],
+                endpoint=request_used["url"],
                 status_code=response.status_code,
                 message="LLM connectivity test succeeded.",
                 detail=body_excerpt or "Received a successful response.",
@@ -154,7 +164,7 @@ class RuntimeSettingsService:
             success=False,
             provider=runtime_config.llm_provider,
             model=runtime_config.llm_model,
-            endpoint=request["url"],
+            endpoint=request_used["url"],
             status_code=response.status_code,
             message="LLM connectivity test failed.",
             detail=body_excerpt or "Remote service returned an error without a response body.",
@@ -271,6 +281,29 @@ class RuntimeSettingsService:
                 "model": config.llm_model,
                 "input": "ping",
                 "max_output_tokens": 1,
+            },
+        }
+
+    def _build_openai_chat_completions_request(self, config: RuntimeConfig) -> dict[str, Any]:
+        base_root = config.llm_base_url
+        if config.llm_provider == "openai":
+            base_root = base_root or "https://api.openai.com/v1"
+        elif not base_root:
+            raise httpx.RequestError("llm_base_url is required when llm_provider=custom.")
+
+        base_url = self._join_base_url(base_root)
+        endpoint = f"{base_url}/chat/completions"
+        return {
+            "method": "POST",
+            "url": endpoint,
+            "headers": {
+                "Authorization": f"Bearer {config.llm_api_key}",
+                "Content-Type": "application/json",
+            },
+            "json": {
+                "model": config.llm_model,
+                "messages": [{"role": "user", "content": "ping"}],
+                "max_tokens": 1,
             },
         }
 

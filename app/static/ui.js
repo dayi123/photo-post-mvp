@@ -385,9 +385,8 @@ function collectSettingsPayload() {
     davinci_input_mode: settingsDavinciInputMode.value,
     davinci_timeout_seconds: Number(settingsDavinciTimeout.value || 60),
   };
-  if (settingsApiKey.value.trim()) {
-    payload.llm_api_key = settingsApiKey.value.trim();
-  }
+  // Always send llm_api_key so users can explicitly clear a saved key from the UI.
+  payload.llm_api_key = settingsApiKey.value.trim();
   return payload;
 }
 

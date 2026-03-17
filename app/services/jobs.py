@@ -247,7 +247,9 @@ class JobService:
             self._transition(job, session, JobState.EDIT_APPLIED)
             self.storage.write_audit(job.id, f"edit_applied_round_{round_number}", job.state, adapter_result)
 
-            preview_2 = self.storage.export_preview(Path(job.original_path), self.storage.preview_2_path(job.id))
+            edited_path = self._resolve_adapter_output_path(adapter_result)
+            preview_source = edited_path if edited_path and edited_path.exists() else Path(job.original_path)
+            preview_2 = self.storage.export_preview(preview_source, self.storage.preview_2_path(job.id))
             job.preview_2_path = str(preview_2)
             self._transition(job, session, JobState.PREVIEW_2_EXPORTED)
             self.storage.write_audit(
@@ -272,7 +274,8 @@ class JobService:
             )
 
             if review.approved:
-                final_path = self.storage.export_preview(Path(job.original_path), self.storage.final_path(job.id))
+                final_source = preview_source
+                final_path = self.storage.export_preview(final_source, self.storage.final_path(job.id))
                 job.final_path = str(final_path)
                 self._transition(job, session, JobState.FINAL_EXPORTED)
                 self.storage.write_audit(job.id, "final_exported", job.state, {"final_path": str(final_path)})
@@ -335,6 +338,13 @@ class JobService:
         else:
             self._persist(job, session)
         self.storage.write_audit(job.id, "failed", job.state, {"error_message": message})
+
+    def _resolve_adapter_output_path(self, adapter_result: dict[str, object]) -> Path | None:
+        raw_path = adapter_result.get("output_path") if isinstance(adapter_result, dict) else None
+        if not raw_path or not isinstance(raw_path, str):
+            return None
+        candidate = Path(raw_path)
+        return candidate if candidate.exists() else None
 
     def _runtime_config_for_job(self, job: Job) -> RuntimeConfig:
         if job.runtime_settings_json:
