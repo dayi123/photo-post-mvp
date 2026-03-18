@@ -3,8 +3,14 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
+from typing import Any
+
+import httpx
+import pytest
 
 from app.config import get_settings
+from app.schemas import RuntimeConfig
+from app.services.runtime_settings import RuntimeSettingsService
 
 
 def _read_audit_record(meta_payload: dict, kind: str) -> dict:
@@ -341,3 +347,32 @@ def test_plan_and_action_audits_include_template_metadata(client):
         "adjustments",
         "export_format",
     ]
+
+
+def test_settings_test_llm_fallback_uses_stream_for_chat_completions(monkeypatch: pytest.MonkeyPatch):
+    service = RuntimeSettingsService()
+    config = RuntimeConfig(
+        llm_provider="custom",
+        llm_model="gpt-5.4",
+        llm_api_key="cr-test",
+        llm_base_url="http://relay.example/api/v1",
+    )
+
+    responses = [
+        httpx.Response(404, text="not found"),
+        httpx.Response(200, text='{"ok": true}'),
+    ]
+    requests_seen: list[dict[str, Any]] = []
+
+    def fake_perform(request: dict[str, Any]) -> httpx.Response:
+        requests_seen.append(request)
+        return responses.pop(0)
+
+    monkeypatch.setattr(service, "_perform_llm_request", fake_perform)
+
+    result = service.test_llm(config)
+    assert result.success is True
+    assert len(requests_seen) == 2
+    assert requests_seen[0]["url"].endswith("/responses")
+    assert requests_seen[1]["url"].endswith("/chat/completions")
+    assert requests_seen[1]["json"]["stream"] is True

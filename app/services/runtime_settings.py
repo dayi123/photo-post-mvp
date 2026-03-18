@@ -150,7 +150,8 @@ class RuntimeSettingsService:
                 and response.status_code in {404, 405, 422, 500}
             )
             if should_fallback:
-                fallback_request = self._build_openai_chat_completions_request(runtime_config)
+                # Some OpenAI-compatible relays only accept streaming chat completions.
+                fallback_request = self._build_openai_chat_completions_request(runtime_config, stream=True)
                 fallback_response = self._perform_llm_request(fallback_request)
                 if fallback_response.is_success:
                     response = fallback_response
@@ -341,7 +342,12 @@ class RuntimeSettingsService:
             max_output_tokens=1024,
         )
 
-    def _build_openai_chat_completions_request(self, config: RuntimeConfig) -> dict[str, Any]:
+    def _build_openai_chat_completions_request(
+        self,
+        config: RuntimeConfig,
+        *,
+        stream: bool = False,
+    ) -> dict[str, Any]:
         base_root = config.llm_base_url
         if config.llm_provider == "openai":
             base_root = base_root or "https://api.openai.com/v1"
@@ -361,6 +367,7 @@ class RuntimeSettingsService:
                 "model": config.llm_model,
                 "messages": [{"role": "user", "content": "ping"}],
                 "max_tokens": 1,
+                "stream": stream,
             },
         }
 
