@@ -235,6 +235,45 @@ def test_settings_test_editor_supports_stub_and_davinci(client, tmp_path: Path):
     assert '"round": 0' in davinci_payload["detail"]
 
 
+def test_confirm_plan_uses_latest_runtime_settings(client):
+    bad_settings = client.put(
+        "/settings",
+        json={
+            "editor_backend": "davinci",
+            "davinci_cmd": "",
+            "davinci_input_mode": "stdin",
+            "davinci_timeout_seconds": 10,
+        },
+    )
+    assert bad_settings.status_code == 200
+
+    created = client.post(
+        "/jobs",
+        files={"file": ("sample.jpg", b"fake-image-bytes", "image/jpeg")},
+    )
+    assert created.status_code == 201
+    job_id = created.json()["id"]
+
+    fixed_settings = client.put(
+        "/settings",
+        json={
+            "editor_backend": "stub",
+            "davinci_cmd": "",
+            "davinci_input_mode": "stdin",
+            "davinci_timeout_seconds": 10,
+        },
+    )
+    assert fixed_settings.status_code == 200
+
+    confirmed = client.post(f"/jobs/{job_id}/confirm-plan", json={"confirmed": True})
+    assert confirmed.status_code == 200
+    assert confirmed.json()["state"] == "DELIVERED_ARCHIVED"
+
+    meta_payload = client.get(f"/jobs/{job_id}/result/meta").json()
+    snapshot_confirm = _read_audit_record(meta_payload, "runtime_settings_snapshot_confirm")
+    assert snapshot_confirm["payload"]["editor_backend"] == "stub"
+
+
 def test_retry_uses_latest_runtime_settings(client, tmp_path: Path):
     bad_settings = client.put(
         "/settings",

@@ -103,6 +103,17 @@ class JobService:
                 detail=f"Job is in state {job.state} and cannot confirm plan.",
             )
 
+        # Stage B runs after user confirmation, so honor the latest saved runtime settings.
+        latest_runtime_config = self.runtime_settings.load()
+        job.runtime_settings_json = latest_runtime_config.model_dump_json()
+        self._persist(job, session)
+        self.storage.write_audit(
+            job.id,
+            "runtime_settings_snapshot_confirm",
+            job.state,
+            self.runtime_settings.to_audit_payload(latest_runtime_config),
+        )
+
         try:
             self._run_stage_b(job, session)
         except HTTPException:
