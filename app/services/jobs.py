@@ -308,7 +308,11 @@ class JobService:
                 },
             )
 
-            adapter_result = editor_adapter.apply_action(action, round_number)
+            adapter_result = editor_adapter.apply_action(
+                action,
+                round_number,
+                source_path=Path(job.original_path),
+            )
             self._transition(job, session, JobState.EDIT_APPLIED)
             self.storage.write_audit(job.id, f"edit_applied_round_{round_number}", job.state, adapter_result)
 

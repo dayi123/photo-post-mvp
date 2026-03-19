@@ -11,6 +11,9 @@ const MODEL_PRESETS = [
   "gemini-3.1",
 ];
 const TAB_IDS = ["workbench", "settings"];
+const RECOMMENDED_DAVINCI_CMD = "py -3 scripts/davinci_bridge.py";
+const RECOMMENDED_DAVINCI_INPUT_MODE = "stdin";
+const RECOMMENDED_DAVINCI_TIMEOUT_SECONDS = 60;
 
 const I18N = {
   en: {
@@ -423,9 +426,9 @@ function renderSettings(settings) {
   settingsPlanTemplatePack.value = settings.plan_template_pack;
   settingsActionTemplatePack.value = settings.action_template_pack;
   settingsEditorBackend.value = settings.editor_backend;
-  settingsDavinciCmd.value = settings.davinci_cmd || "";
-  settingsDavinciInputMode.value = settings.davinci_input_mode;
-  settingsDavinciTimeout.value = String(settings.davinci_timeout_seconds);
+  settingsDavinciCmd.value = settings.davinci_cmd || RECOMMENDED_DAVINCI_CMD;
+  settingsDavinciInputMode.value = settings.davinci_input_mode || RECOMMENDED_DAVINCI_INPUT_MODE;
+  settingsDavinciTimeout.value = String(settings.davinci_timeout_seconds || RECOMMENDED_DAVINCI_TIMEOUT_SECONDS);
   settingsKeyMask.textContent = settings.llm_api_key_masked || t("not_set");
   settingsStatus.textContent = settings.llm_api_key_configured ? t("status_key_configured") : t("status_stub_fallback");
   settingsEffectivePlanPack.textContent = settings.effective_plan_template_pack;

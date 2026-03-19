@@ -17,12 +17,12 @@ class EditorAdapterError(RuntimeError):
 
 class EditorAdapter(ABC):
     @abstractmethod
-    def apply_action(self, action: Action, round_number: int) -> dict[str, Any]:
+    def apply_action(self, action: Action, round_number: int, source_path: Path | None = None) -> dict[str, Any]:
         raise NotImplementedError
 
 
 class StubAdapter(EditorAdapter):
-    def apply_action(self, action: Action, round_number: int) -> dict[str, Any]:
+    def apply_action(self, action: Action, round_number: int, source_path: Path | None = None) -> dict[str, Any]:
         return {
             "adapter": "stub",
             "round": round_number,
@@ -37,18 +37,19 @@ class DaVinciAdapter(EditorAdapter):
         self.input_mode = input_mode.strip().lower()
         self.timeout_seconds = timeout_seconds
 
-    def apply_action(self, action: Action, round_number: int) -> dict[str, Any]:
+    def apply_action(self, action: Action, round_number: int, source_path: Path | None = None) -> dict[str, Any]:
         if not self.command:
             raise EditorAdapterError("davinci_cmd is required when editor_backend=davinci.")
         if self.input_mode not in {"stdin", "file"}:
             raise EditorAdapterError("davinci_input_mode must be either 'stdin' or 'file'.")
 
-        payload = json.dumps(
-            {
-                "round": round_number,
-                "action": action.model_dump(mode="json"),
-            }
-        )
+        payload_body: dict[str, Any] = {
+            "round": round_number,
+            "action": action.model_dump(mode="json"),
+        }
+        if source_path:
+            payload_body["source_path"] = str(source_path)
+        payload = json.dumps(payload_body)
         command = self.command
         env = os.environ.copy()
         stdin_data = None
@@ -91,13 +92,21 @@ class DaVinciAdapter(EditorAdapter):
                 f"DaVinci command failed with exit code {completed.returncode}: {detail}"
             )
 
+        parsed_output = self._parse_output(stdout_text)
+        output_path = None
+        if isinstance(parsed_output, dict):
+            raw_output_path = parsed_output.get("output_path")
+            if isinstance(raw_output_path, str) and raw_output_path.strip():
+                output_path = raw_output_path.strip()
+
         return {
             "adapter": "davinci",
             "round": round_number,
             "status": "applied",
             "input_mode": self.input_mode,
             "command": command,
-            "output": self._parse_output(stdout_text),
+            "output": parsed_output,
+            "output_path": output_path,
             "stderr": stderr_text or None,
         }
 
