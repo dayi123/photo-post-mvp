@@ -3,10 +3,13 @@ from __future__ import annotations
 from app.schemas import Action, ActionAdjustment, Plan, PlanStep, Review, ReviewDecision
 
 
-def generate_plan(original_filename: str) -> Plan:
+def generate_plan(original_filename: str, desired_effect: str | None = None) -> Plan:
     base_name = original_filename.rsplit(".", 1)[0]
+    summary = f"Prepare a clean social-ready edit for {base_name} with balanced tone and detail."
+    if desired_effect:
+        summary = f"Target user desired effect: {desired_effect}. " + summary
     return Plan(
-        summary=f"Prepare a clean social-ready edit for {base_name} with balanced tone and detail.",
+        summary=summary,
         goals=["recover highlights", "lift subject visibility", "keep natural color"],
         risks=["avoid oversaturation", "protect skin texture"],
         steps=[

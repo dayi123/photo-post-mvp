@@ -207,11 +207,13 @@ class RuntimeSettingsService:
         config: RuntimeConfig,
         original_filename: str,
         analysis_image_path: Path | None = None,
+        desired_effect: str | None = None,
     ) -> dict[str, Any]:
         rendered = prompt_templates.build_plan_prompt(
             original_filename=original_filename,
             model=config.llm_model,
             override=config.plan_template_pack,
+            desired_effect=desired_effect,
         )
         analysis_image_data = self._encode_image_as_data_url(analysis_image_path)
         return self._build_stage_request_payload(

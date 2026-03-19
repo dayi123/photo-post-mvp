@@ -22,6 +22,7 @@ const I18N = {
     tab_settings: "Settings",
     label_photo: "Photo",
     label_local_path: "Local photo path",
+    label_desired_effect: "Desired effect (optional)",
     btn_upload: "Upload photo",
     btn_use_local_path: "Use local path",
     btn_retry: "Retry",
@@ -99,6 +100,7 @@ const I18N = {
     tab_settings: "配置",
     label_photo: "照片",
     label_local_path: "本地照片路径",
+    label_desired_effect: "期望效果（可选）",
     btn_upload: "上传照片",
     btn_use_local_path: "使用本地路径",
     btn_retry: "重试",
@@ -204,6 +206,7 @@ const uploadButton = document.getElementById("upload-button");
 const localPathForm = document.getElementById("local-path-form");
 const localPathInput = document.getElementById("local-path-input");
 const localPathButton = document.getElementById("local-path-button");
+const desiredEffectInput = document.getElementById("desired-effect-input");
 const confirmButton = document.getElementById("confirm-button");
 const retryButton = document.getElementById("retry-button");
 const flash = document.getElementById("flash");
@@ -364,7 +367,7 @@ function showResult(job) {
   const imageUrl = `/jobs/${job.id}/result?ts=${Date.now()}`;
   resultImage.src = imageUrl;
   resultDownload.href = `/jobs/${job.id}/result`;
-  resultDownload.download = `${job.id}-final.jpg`;
+  resultDownload.download = job.original_filename || `${job.id}-final.jpg`;
   resultEmpty.hidden = true;
   resultContent.hidden = false;
 }
@@ -504,6 +507,7 @@ uploadForm.addEventListener("submit", async (event) => {
   try {
     const formData = new FormData();
     formData.append("file", file);
+    formData.append("desired_effect", desiredEffectInput.value.trim());
     const job = await api("/jobs", { method: "POST", body: formData });
     state.jobId = job.id;
     renderJob(job);
@@ -540,7 +544,10 @@ localPathForm.addEventListener("submit", async (event) => {
     const job = await api("/jobs/from-path", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ path: pathValue }),
+      body: JSON.stringify({
+        path: pathValue,
+        desired_effect: desiredEffectInput.value.trim(),
+      }),
     });
     state.jobId = job.id;
     renderJob(job);

@@ -90,12 +90,22 @@ class ConfirmPlanRequest(BaseModel):
 
 class CreateJobFromPathRequest(BaseModel):
     path: str = Field(min_length=1, max_length=1000)
+    desired_effect: str | None = Field(default=None, max_length=500)
+
+    @field_validator("desired_effect", mode="before")
+    @classmethod
+    def normalize_desired_effect(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = str(value).strip()
+        return normalized or None
 
 
 class JobRead(BaseModel):
     id: str
     state: JobState
     original_filename: str
+    desired_effect: str | None
     review_rounds: int
     error_message: str | None
     preview_1_path: str | None

@@ -48,18 +48,30 @@ class JobService:
         self.runtime_settings = RuntimeSettingsService(self.settings)
         self.llm_client = LlmClient()
 
-    def create_job(self, session: Session, upload: UploadFile) -> Job:
+    def create_job(
+        self,
+        session: Session,
+        upload: UploadFile,
+        desired_effect: str | None = None,
+    ) -> Job:
         self._validate_upload(upload)
         payload = upload.file.read()
         if not payload:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded file is empty.")
 
+        normalized_effect = desired_effect.strip() if isinstance(desired_effect, str) else None
         job = self._create_empty_job(session, Path(upload.filename or "upload.jpg").name)
+        job.desired_effect = normalized_effect or None
         original_path = self.storage.save_original(job.id, job.original_filename, payload)
         job.original_path = str(original_path)
         return self._run_created_job(session, job)
 
-    def create_job_from_local_path(self, session: Session, local_path: str) -> Job:
+    def create_job_from_local_path(
+        self,
+        session: Session,
+        local_path: str,
+        desired_effect: str | None = None,
+    ) -> Job:
         source = Path(local_path).expanduser()
         if not source.exists() or not source.is_file():
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Local photo path does not exist.")
@@ -76,6 +88,7 @@ class JobService:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Selected local file is empty.")
 
         job = self._create_empty_job(session, source.name)
+        job.desired_effect = desired_effect
         original_path = self.storage.save_original(job.id, source.name, payload)
         job.original_path = str(original_path)
         self.storage.write_audit(job.id, "local_path_selected", job.state, {"source_path": str(source)})
@@ -173,6 +186,7 @@ class JobService:
             id=job.id,
             state=job.state,
             original_filename=job.original_filename,
+            desired_effect=job.desired_effect,
             review_rounds=job.review_rounds,
             error_message=job.error_message,
             preview_1_path=job.preview_1_path,
@@ -214,13 +228,20 @@ class JobService:
             original_filename=job.original_filename,
             model=runtime_config.llm_model,
             override=runtime_config.plan_template_pack,
+            desired_effect=job.desired_effect,
         )
         plan_request_payload = self.runtime_settings.build_plan_request_payload(
             runtime_config,
             job.original_filename,
             analysis_image_path=analysis_path,
+            desired_effect=job.desired_effect,
         )
-        plan, plan_execution = self._generate_plan(runtime_config, job.original_filename, plan_request_payload)
+        plan, plan_execution = self._generate_plan(
+            runtime_config,
+            job.original_filename,
+            plan_request_payload,
+            desired_effect=job.desired_effect,
+        )
         job.plan_json = plan.model_dump_json()
         self._transition(job, session, JobState.PLAN_GENERATED)
         self.storage.write_audit(
@@ -321,7 +342,10 @@ class JobService:
 
             if review.approved:
                 final_source = preview_source
-                final_path = self.storage.export_preview(final_source, self.storage.final_path(job.id))
+                final_path = self.storage.export_preview(
+                    final_source,
+                    self.storage.final_path(job.id, job.original_filename),
+                )
                 job.final_path = str(final_path)
                 self._transition(job, session, JobState.FINAL_EXPORTED)
                 self.storage.write_audit(job.id, "final_exported", job.state, {"final_path": str(final_path)})
@@ -340,9 +364,13 @@ class JobService:
         runtime_config: RuntimeConfig,
         original_filename: str,
         prepared_payload: dict[str, object],
+        desired_effect: str | None = None,
     ) -> tuple[Plan, dict[str, object]]:
         if not runtime_config.llm_api_key:
-            return llm_stub.generate_plan(original_filename), self.runtime_settings.llm_stub_audit_payload(runtime_config)
+            return llm_stub.generate_plan(
+                original_filename,
+                desired_effect=desired_effect,
+            ), self.runtime_settings.llm_stub_audit_payload(runtime_config)
 
         request = self.runtime_settings.build_llm_execute_request(runtime_config, prepared_payload)
         try:
@@ -357,7 +385,7 @@ class JobService:
         except (LlmClientError, ValueError) as exc:
             fallback = self.runtime_settings.llm_stub_audit_payload(runtime_config)
             fallback["note"] = f"Remote LLM failed for plan; used local stub fallback. reason={exc}"
-            return llm_stub.generate_plan(original_filename), fallback
+            return llm_stub.generate_plan(original_filename, desired_effect=desired_effect), fallback
 
     def _generate_action(
         self,
@@ -489,7 +517,12 @@ class JobService:
         runtime_config = self.runtime_settings.load()
         job.runtime_settings_json = runtime_config.model_dump_json()
         self._persist(job, session)
-        self.storage.write_audit(job.id, "job_received", job.state, {"filename": job.original_filename})
+        self.storage.write_audit(
+            job.id,
+            "job_received",
+            job.state,
+            {"filename": job.original_filename, "desired_effect": job.desired_effect},
+        )
         self.storage.write_audit(
             job.id,
             "runtime_settings_snapshot",

@@ -20,6 +20,7 @@ class Job(SQLModel, table=True):
     preview_2_path: Optional[str] = None
     final_path: Optional[str] = None
     original_path: Optional[str] = None
+    desired_effect: Optional[str] = None
     review_rounds: int = 0
     error_message: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)

@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile, status
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile, status
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -74,8 +74,9 @@ def create_app() -> FastAPI:
     def create_job(
         session: Annotated[Session, Depends(get_session)],
         file: UploadFile = File(...),
+        desired_effect: str | None = Form(default=None),
     ):
-        job = service.create_job(session, file)
+        job = service.create_job(session, file, desired_effect=desired_effect)
         return service.to_read(job)
 
     @app.post("/jobs/from-path", status_code=status.HTTP_201_CREATED, response_model=JobRead)
@@ -83,7 +84,11 @@ def create_app() -> FastAPI:
         request: CreateJobFromPathRequest,
         session: Annotated[Session, Depends(get_session)],
     ):
-        job = service.create_job_from_local_path(session, request.path)
+        job = service.create_job_from_local_path(
+            session,
+            request.path,
+            desired_effect=request.desired_effect,
+        )
         return service.to_read(job)
 
     @app.get("/jobs/{job_id}", response_model=JobRead)

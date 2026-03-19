@@ -31,11 +31,13 @@ def test_ui_route_exists(client):
 def test_job_lifecycle(client):
     response = client.post(
         "/jobs",
+        data={"desired_effect": "cinematic, warm tone"},
         files={"file": ("sample.jpg", b"fake-image-bytes", "image/jpeg")},
     )
     assert response.status_code == 201
     payload = response.json()
     assert payload["state"] == "WAIT_USER_CONFIRM"
+    assert payload["desired_effect"] == "cinematic, warm tone"
     job_id = payload["id"]
 
     plan_response = client.get(f"/jobs/{job_id}/plan")

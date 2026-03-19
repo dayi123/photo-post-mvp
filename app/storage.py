@@ -50,8 +50,9 @@ class StorageManager:
     def preview_2_path(self, job_id: str) -> Path:
         return self.job_dir(job_id) / "preview_2.jpg"
 
-    def final_path(self, job_id: str) -> Path:
-        return self.job_dir(job_id) / "final.jpg"
+    def final_path(self, job_id: str, original_filename: str) -> Path:
+        # Keep the exported filename aligned with the user's original name.
+        return self.job_dir(job_id) / Path(original_filename).name
 
     def export_analysis_jpeg(
         self,

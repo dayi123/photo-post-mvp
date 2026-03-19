@@ -81,9 +81,16 @@ def build_plan_prompt(
     original_filename: str,
     model: str,
     override: TemplatePackOverride = "auto",
+    desired_effect: str | None = None,
 ) -> RenderedPrompt:
     pack = resolve_pack(model, override)
-    return RenderedPrompt(pack=pack, text=PLAN_TEMPLATES[pack].format(original_filename=original_filename))
+    effect_line = (
+        f"User desired effect: {desired_effect}"
+        if desired_effect
+        else "User desired effect: (none provided; infer a suitable effect from the photo)."
+    )
+    text = f"{PLAN_TEMPLATES[pack].format(original_filename=original_filename)}\n{effect_line}"
+    return RenderedPrompt(pack=pack, text=text)
 
 
 def build_action_prompt(

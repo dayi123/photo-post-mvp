@@ -26,6 +26,10 @@ def init_db() -> None:
         with engine.begin() as connection:
             connection.execute(text("ALTER TABLE job ADD COLUMN runtime_settings_json TEXT"))
 
+    if "desired_effect" not in columns:
+        with engine.begin() as connection:
+            connection.execute(text("ALTER TABLE job ADD COLUMN desired_effect TEXT"))
+
 
 def get_session():
     with Session(get_engine()) as session:
