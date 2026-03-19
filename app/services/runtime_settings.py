@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import json
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -14,6 +15,15 @@ from app.services import prompt_templates
 
 
 LLM_TEST_TIMEOUT_SECONDS = 15
+_SELF_TEST_JPEG_BASE64 = (
+    "/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEAAkGBxAQEBUQEA8VFRUVFRUVFRUVFRUVFRUXFhUWFhUV\n"
+    "FRUYHSggGBolGxUVITEhJSkrLi4uFx8zODMsNygtLisBCgoKDg0OGxAQGy0lHyYtLS0tLS0tLS0t\n"
+    "LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLf/AABEIABkAGQMBIgACEQEDEQH/\n"
+    "xAAVAAEBAAAAAAAAAAAAAAAAAAAABf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhADEAAA\n"
+    "Af8A/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABBQJ//8QAFBEBAAAAAAAAAAAAAAAAAAAA\n"
+    "AP/aAAgBAwEBPwF//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAgEBPwF//8QAFBABAAAAAAAA\n"
+    "AAAAAAAAAAAAAP/aAAgBAQAGPwJ//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPyF//9k="
+)
 
 
 def mask_secret(secret: str | None) -> str | None:
@@ -103,8 +113,18 @@ class RuntimeSettingsService:
             adjustments=[{"op": "exposure", "value": 1, "rationale": "Connectivity self-test."}],
             export_format="jpg",
         )
+
+        source_path: Path | None = None
+        temp_source_path: Path | None = None
+        if effective_config.editor_backend == "davinci":
+            # DaVinci bridge self-test needs a valid source path.
+            temp_source_path = Path(tempfile.gettempdir()) / "photo-post-mvp" / "editor-self-test.jpg"
+            temp_source_path.parent.mkdir(parents=True, exist_ok=True)
+            temp_source_path.write_bytes(base64.b64decode(_SELF_TEST_JPEG_BASE64))
+            source_path = temp_source_path
+
         try:
-            result = adapter.apply_action(sample_action, 0)
+            result = adapter.apply_action(sample_action, 0, source_path=source_path)
         except EditorAdapterError as exc:
             return SettingsTestResult(
                 success=False,
@@ -112,6 +132,9 @@ class RuntimeSettingsService:
                 message="Editor self-test failed.",
                 detail=str(exc),
             )
+        finally:
+            if temp_source_path and temp_source_path.exists():
+                temp_source_path.unlink()
 
         if runtime_config.editor_backend == "davinci" and not runtime_config.davinci_cmd:
             return SettingsTestResult(
