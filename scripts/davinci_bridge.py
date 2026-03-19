@@ -11,6 +11,11 @@ import time
 from pathlib import Path
 from typing import Any
 
+try:  # pragma: no cover
+    import cv2
+except Exception:  # pragma: no cover
+    cv2 = None
+
 try:  # pragma: no cover - import guard for minimal environments
     from PIL import Image, ImageEnhance
 except Exception:  # pragma: no cover
@@ -256,6 +261,31 @@ def _find_output_file(target_dir: Path, base_name: str) -> Path:
     return candidates[0]
 
 
+def _extract_still_from_video(video_path: Path, export_format: str) -> Path:
+    if cv2 is None:
+        raise RuntimeError("OpenCV is required to extract still image from Resolve video output (pip install opencv-python-headless).")
+
+    capture = cv2.VideoCapture(str(video_path))
+    try:
+        ok, frame = capture.read()
+    finally:
+        capture.release()
+
+    if not ok or frame is None:
+        raise RuntimeError(f"Failed to read first frame from Resolve output: {video_path}")
+
+    ext = ".png" if export_format.lower() == "png" else ".jpg"
+    output_path = video_path.with_suffix(ext)
+    if ext == ".jpg":
+        success = cv2.imwrite(str(output_path), frame, [int(cv2.IMWRITE_JPEG_QUALITY), 92])
+    else:
+        success = cv2.imwrite(str(output_path), frame)
+
+    if not success:
+        raise RuntimeError(f"Failed to write extracted still image: {output_path}")
+    return output_path
+
+
 def _map_resolve_format(export_format: str) -> tuple[str, str]:
     normalized = export_format.lower()
     if normalized == "png":
@@ -346,7 +376,10 @@ def _materialize_resolve_output(payload: dict[str, Any], timeout_seconds: int) -
             raise RuntimeError(f"Resolve render timed out after {timeout_seconds} seconds.")
         time.sleep(0.5)
 
-    return _find_output_file(output_dir, base_name)
+    rendered_path = _find_output_file(output_dir, base_name)
+    if rendered_path.suffix.lower() in {".mov", ".mp4", ".mxf"}:
+        return _extract_still_from_video(rendered_path, export_format=export_format)
+    return rendered_path
 
 
 def main() -> int:
