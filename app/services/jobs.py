@@ -317,7 +317,15 @@ class JobService:
             self.storage.write_audit(job.id, f"edit_applied_round_{round_number}", job.state, adapter_result)
 
             edited_path = self._resolve_adapter_output_path(adapter_result)
-            preview_source = edited_path if edited_path and edited_path.exists() else Path(job.original_path)
+            if runtime_config.editor_backend == "davinci":
+                if not edited_path or not edited_path.exists():
+                    raise ValueError(
+                        "DaVinci did not return a valid output_path. "
+                        "Please ensure your davinci_cmd prints JSON with output_path pointing to a rendered file."
+                    )
+                preview_source = edited_path
+            else:
+                preview_source = edited_path if edited_path and edited_path.exists() else Path(job.original_path)
             preview_2 = self.storage.export_preview(preview_source, self.storage.preview_2_path(job.id))
             job.preview_2_path = str(preview_2)
             self._transition(job, session, JobState.PREVIEW_2_EXPORTED)
@@ -348,7 +356,7 @@ class JobService:
                 final_source = preview_source
                 final_path = self.storage.export_preview(
                     final_source,
-                    self.storage.final_path(job.id, job.original_filename),
+                    self.storage.final_path(job.id, job.original_filename, rendered_source=final_source),
                 )
                 job.final_path = str(final_path)
                 self._transition(job, session, JobState.FINAL_EXPORTED)

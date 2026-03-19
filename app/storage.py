@@ -38,6 +38,17 @@ class StorageManager:
 
     def export_preview(self, source: Path, target: Path) -> Path:
         target.parent.mkdir(parents=True, exist_ok=True)
+
+        # For browser-visible artifacts, try to materialize true JPEG bytes.
+        if target.suffix.lower() in {".jpg", ".jpeg"} and Image is not None:
+            try:
+                with Image.open(source) as img:
+                    img.convert("RGB").save(target, format="JPEG", quality=90, optimize=True)
+                    return target
+            except Exception:
+                # Keep fallback behavior for unsupported formats or minimal test fixtures.
+                pass
+
         shutil.copyfile(source, target)
         return target
 
@@ -50,9 +61,13 @@ class StorageManager:
     def preview_2_path(self, job_id: str) -> Path:
         return self.job_dir(job_id) / "preview_2.jpg"
 
-    def final_path(self, job_id: str, original_filename: str) -> Path:
-        # Keep the exported filename aligned with the user's original name.
-        return self.job_dir(job_id) / Path(original_filename).name
+    def final_path(self, job_id: str, original_filename: str, rendered_source: Path | None = None) -> Path:
+        # Keep the user's base filename, but follow the rendered file extension for compatibility.
+        original = Path(original_filename).name
+        stem = Path(original).stem
+        if rendered_source is not None and rendered_source.suffix:
+            return self.job_dir(job_id) / f"{stem}{rendered_source.suffix.lower()}"
+        return self.job_dir(job_id) / original
 
     def export_analysis_jpeg(
         self,

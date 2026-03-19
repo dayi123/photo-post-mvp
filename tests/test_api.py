@@ -323,8 +323,7 @@ def test_retry_uses_latest_runtime_settings(client, tmp_path: Path):
     assert good_settings.status_code == 200
 
     retry = client.post(f"/jobs/{job_id}/retry")
-    assert retry.status_code == 200
-    assert retry.json()["state"] in {"FAILED", "DELIVERED_ARCHIVED"}
+    assert retry.status_code == 500
 
     meta_payload = client.get(f"/jobs/{job_id}/result/meta").json()
     snapshot_retry = _read_audit_record(meta_payload, "runtime_settings_snapshot_retry")

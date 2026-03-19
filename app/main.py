@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+import mimetypes
 from pathlib import Path
 from typing import Annotated
 
@@ -123,7 +124,8 @@ def create_app() -> FastAPI:
         final_path = Path(job.final_path)
         if not final_path.exists():
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Final file is missing.")
-        return FileResponse(path=final_path, media_type="image/jpeg", filename=final_path.name)
+        media_type, _ = mimetypes.guess_type(final_path.name)
+        return FileResponse(path=final_path, media_type=media_type or "application/octet-stream", filename=final_path.name)
 
     @app.get("/jobs/{job_id}/result/meta", response_model=ResultEnvelope)
     def get_result_meta(job_id: str, session: Annotated[Session, Depends(get_session)]):
