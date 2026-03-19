@@ -11,7 +11,7 @@ const MODEL_PRESETS = [
   "gemini-3.1",
 ];
 const TAB_IDS = ["workbench", "settings"];
-const RECOMMENDED_DAVINCI_CMD = "py -3 scripts/davinci_bridge.py";
+const RECOMMENDED_DAVINCI_CMD = "py -3 scripts/davinci_bridge.py --mode auto";
 const RECOMMENDED_DAVINCI_INPUT_MODE = "stdin";
 const RECOMMENDED_DAVINCI_TIMEOUT_SECONDS = 60;
 
