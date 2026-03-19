@@ -15,14 +15,8 @@ from app.services import prompt_templates
 
 
 LLM_TEST_TIMEOUT_SECONDS = 15
-_SELF_TEST_JPEG_BASE64 = (
-    "/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEAAkGBxAQEBUQEA8VFRUVFRUVFRUVFRUVFRUXFhUWFhUV\n"
-    "FRUYHSggGBolGxUVITEhJSkrLi4uFx8zODMsNygtLisBCgoKDg0OGxAQGy0lHyYtLS0tLS0tLS0t\n"
-    "LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLf/AABEIABkAGQMBIgACEQEDEQH/\n"
-    "xAAVAAEBAAAAAAAAAAAAAAAAAAAABf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhADEAAA\n"
-    "Af8A/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABBQJ//8QAFBEBAAAAAAAAAAAAAAAAAAAA\n"
-    "AP/aAAgBAwEBPwF//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAgEBPwF//8QAFBABAAAAAAAA\n"
-    "AAAAAAAAAAAAAP/aAAgBAQAGPwJ//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPyF//9k="
+_SELF_TEST_PNG_BASE64 = (
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+X2ioAAAAASUVORK5CYII="
 )
 
 
@@ -118,9 +112,9 @@ class RuntimeSettingsService:
         temp_source_path: Path | None = None
         if effective_config.editor_backend == "davinci":
             # DaVinci bridge self-test needs a valid source path.
-            temp_source_path = Path(tempfile.gettempdir()) / "photo-post-mvp" / "editor-self-test.jpg"
+            temp_source_path = Path(tempfile.gettempdir()) / "photo-post-mvp" / "editor-self-test.png"
             temp_source_path.parent.mkdir(parents=True, exist_ok=True)
-            temp_source_path.write_bytes(base64.b64decode(_SELF_TEST_JPEG_BASE64))
+            temp_source_path.write_bytes(base64.b64decode(_SELF_TEST_PNG_BASE64))
             source_path = temp_source_path
 
         try:
