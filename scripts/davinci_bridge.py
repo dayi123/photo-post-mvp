@@ -173,7 +173,7 @@ def _materialize_template_output(payload: dict[str, Any]) -> Path:
     if not isinstance(source_hint, str) or not source_hint.strip():
         raise ValueError("Missing source_path in payload.")
 
-    source = Path(source_hint)
+    source = Path(source_hint).expanduser().resolve()
     if not source.exists():
         raise ValueError(f"source_path does not exist: {source}")
 
@@ -198,7 +198,27 @@ def _materialize_template_output(payload: dict[str, Any]) -> Path:
     return output_path
 
 
+def _prepare_resolve_library_path() -> None:
+    lib_path = os.getenv("RESOLVE_SCRIPT_LIB", "").strip()
+    if not lib_path:
+        return
+
+    lib_dir = Path(lib_path).expanduser().resolve().parent
+    if not lib_dir.exists():
+        return
+
+    # Python 3.8+ on Windows requires explicit DLL directories for dependent libs.
+    if hasattr(os, "add_dll_directory"):
+        os.add_dll_directory(str(lib_dir))
+
+    path_value = os.getenv("PATH", "")
+    if str(lib_dir) not in path_value:
+        os.environ["PATH"] = f"{lib_dir}{os.pathsep}{path_value}" if path_value else str(lib_dir)
+
+
 def _try_import_resolve_module() -> Any:
+    _prepare_resolve_library_path()
+
     try:
         return importlib.import_module("DaVinciResolveScript")
     except ImportError:
@@ -248,7 +268,7 @@ def _materialize_resolve_output(payload: dict[str, Any], timeout_seconds: int) -
     if not isinstance(source_hint, str) or not source_hint.strip():
         raise ValueError("Missing source_path in payload.")
 
-    source = Path(source_hint)
+    source = Path(source_hint).expanduser().resolve()
     if not source.exists():
         raise ValueError(f"source_path does not exist: {source}")
 
@@ -260,9 +280,15 @@ def _materialize_resolve_output(payload: dict[str, Any], timeout_seconds: int) -
     project_manager = resolve.GetProjectManager()
     if project_manager is None:
         raise RuntimeError("Resolve project manager is unavailable.")
+
     project = project_manager.GetCurrentProject()
     if project is None:
-        raise RuntimeError("No active Resolve project. Open a project and try again.")
+        # Keep first-time setup ergonomic: try a dedicated project if none is open.
+        project = project_manager.LoadProject("photo-post-mvp-bridge")
+        if project is None:
+            project = project_manager.CreateProject("photo-post-mvp-bridge")
+    if project is None:
+        raise RuntimeError("No active Resolve project and failed to create project photo-post-mvp-bridge.")
 
     media_pool = project.GetMediaPool()
     if media_pool is None:
